@@ -1,0 +1,64 @@
+<resources>
+    <string name="app_name">Crunch</string>
+
+    <!-- Download screen -->
+    <string name="paste_link_hint">Paste a video or playlist URL…</string>
+    <string name="btn_fetch">Fetch</string>
+    <string name="btn_download">Download</string>
+    <string name="btn_cancel">Cancel</string>
+    <string name="btn_retry">Retry</string>
+    <string name="btn_delete">Delete</string>
+    <string name="btn_share">Share</string>
+    <string name="btn_open">Open</string>
+    <string name="label_video">Video</string>
+    <string name="label_audio">Audio</string>
+    <string name="label_quality">Quality</string>
+    <string name="label_video_quality">Video Quality</string>
+    <string name="label_audio_quality">Audio Quality</string>
+    <string name="label_audio_format">Audio Format</string>
+    <string name="label_subtitles">Subtitles</string>
+    <string name="label_embed_subtitles">Embed subtitles</string>
+    <string name="label_subtitle_language">Subtitle language</string>
+    <string name="label_playlist">Playlist detected</string>
+    <string name="label_playlist_count">%d videos</string>
+    <string name="label_fetching">Fetching info…</string>
+    <string name="label_downloading">Downloading…</string>
+    <string name="label_processing">Processing…</string>
+    <string name="label_completed">Completed</string>
+    <string name="label_failed">Failed</string>
+    <string name="label_queued">Queued</string>
+    <string name="label_paused">Paused</string>
+    <string name="nav_download">Download</string>
+    <string name="nav_downloads">Downloads</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_output_folder">Download folder</string>
+    <string name="settings_output_folder_desc">Where files are saved</string>
+    <string name="settings_fast_downloader">Faster external downloader (aria2c)</string>
+    <string name="settings_fast_downloader_desc">Requires aria2c binary in app files dir</string>
+    <string name="settings_custom_templates">Custom command templates</string>
+    <string name="settings_add_template">Add template</string>
+    <string name="settings_template_name_hint">Template name</string>
+    <string name="settings_template_args_hint">Extra yt-dlp arguments</string>
+    <string name="settings_max_concurrent">Max concurrent downloads</string>
+    <string name="settings_thumbnail_embed">Embed thumbnail in audio files</string>
+    <string name="settings_metadata_embed">Embed metadata in audio files</string>
+    <string name="settings_video_title">Video</string>
+    <string name="settings_video_container">Video container format</string>
+    <string name="settings_video_container_desc">Remux and convert downloaded videos into MKV for better compatibility and optimization</string>
+    <string name="settings_default_audio_format">Default audio format</string>
+    <string name="settings_default_video_format">Default video format preference</string>
+    <string name="error_invalid_url">Please enter a valid URL</string>
+    <string name="error_fetch_failed">Could not fetch video info. Check the URL and your connection.</string>
+    <string name="error_ytdlp_not_found">yt-dlp binary not found. Tap to download it.</string>
+    <string name="downloading_ytdlp">Downloading yt-dlp engine…</string>
+    <string name="ytdlp_ready">yt-dlp ready</string>
+    <string name="no_downloads">No downloads yet.\nPaste a link to get started.</string>
+    <string name="active_downloads">Active</string>
+    <string name="completed_downloads">Completed</string>
+    <string name="delete_confirm_title">Delete download?</string>
+    <string name="delete_confirm_body">This will remove the file from your device.</string>
+    <string name="delete_file_only">Delete file too</string>
+</resources>
