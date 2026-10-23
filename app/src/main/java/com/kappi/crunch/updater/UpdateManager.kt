@@ -156,7 +156,7 @@ class UpdateManager(private val context: Context) {
         )
 
         val appIcon = try {
-            android.graphics.BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher)
+            android.graphics.BitmapFactory.decodeResource(context.resources, R.drawable.ic_crunch_notification)
         } catch (e: Exception) {
             null
         }

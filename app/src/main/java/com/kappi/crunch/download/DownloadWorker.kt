@@ -44,7 +44,7 @@ class DownloadWorker(
 
     private fun getAppIcon(): Bitmap? {
         return try {
-            BitmapFactory.decodeResource(applicationContext.resources, R.mipmap.ic_launcher)
+            BitmapFactory.decodeResource(applicationContext.resources, R.drawable.ic_crunch_notification)
         } catch (e: Exception) {
             null
         }

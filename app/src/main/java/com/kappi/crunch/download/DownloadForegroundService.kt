@@ -22,7 +22,11 @@ class DownloadForegroundService : Service() {
     override fun onCreate() {
         super.onCreate()
         createChannel()
-        val appIcon = android.graphics.BitmapFactory.decodeResource(resources, com.kappi.crunch.R.mipmap.ic_launcher)
+        val appIcon = try {
+            android.graphics.BitmapFactory.decodeResource(resources, com.kappi.crunch.R.drawable.ic_crunch_notification)
+        } catch (e: Exception) {
+            null
+        }
         val notification = androidx.core.app.NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(com.kappi.crunch.R.drawable.ic_launcher_monochrome)
             .setLargeIcon(appIcon)
