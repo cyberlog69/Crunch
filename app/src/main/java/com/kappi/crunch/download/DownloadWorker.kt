@@ -16,6 +16,8 @@ import com.kappi.crunch.R
 import com.kappi.crunch.data.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import java.io.File
 import java.util.Locale
 
@@ -40,6 +42,14 @@ class DownloadWorker(
     private val engine = YtDlpEngine(appContext)
     private val prefs = UserPreferences(appContext)
 
+    private fun getAppIcon(): Bitmap? {
+        return try {
+            BitmapFactory.decodeResource(applicationContext.resources, R.mipmap.ic_launcher)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     override suspend fun getForegroundInfo(): ForegroundInfo {
         createNotificationChannels()
         val downloadId = inputData.getString(KEY_DOWNLOAD_ID) ?: ""
@@ -53,7 +63,8 @@ class DownloadWorker(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val notification = NotificationCompat.Builder(applicationContext, CHANNEL_DOWNLOADING_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setSmallIcon(R.drawable.ic_launcher_monochrome)
+            .setLargeIcon(getAppIcon())
             .setContentTitle(title)
             .setContentText("Crunch download in progress…")
             .setOngoing(true)
@@ -247,7 +258,8 @@ class DownloadWorker(
         )
 
         return NotificationCompat.Builder(applicationContext, CHANNEL_DOWNLOADING_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setSmallIcon(R.drawable.ic_launcher_monochrome)
+            .setLargeIcon(getAppIcon())
             .setContentTitle(item.title.take(60))
             .setContentText(progressText)
             .setProgress(100, pct, progress <= 0f)
@@ -278,7 +290,8 @@ class DownloadWorker(
         val subtitle = if (sizeStr.isNotEmpty()) "Finished downloading • $sizeStr • Tap to open" else "Finished downloading • Tap to open"
 
         val builder = NotificationCompat.Builder(applicationContext, CHANNEL_COMPLETED_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setSmallIcon(R.drawable.ic_launcher_monochrome)
+            .setLargeIcon(getAppIcon())
             .setContentTitle("Download Complete: ${item.title.take(50)}")
             .setContentText(subtitle)
             .setStyle(NotificationCompat.BigTextStyle().bigText("${item.title}\n$subtitle"))
@@ -311,7 +324,8 @@ class DownloadWorker(
         )
 
         val builder = NotificationCompat.Builder(applicationContext, CHANNEL_COMPLETED_ID)
-            .setSmallIcon(android.R.drawable.stat_notify_error)
+            .setSmallIcon(R.drawable.ic_launcher_monochrome)
+            .setLargeIcon(getAppIcon())
             .setContentTitle("Download Failed: ${item.title.take(50)}")
             .setContentText(errorMsg)
             .setStyle(NotificationCompat.BigTextStyle().bigText("${item.title}\n$errorMsg"))

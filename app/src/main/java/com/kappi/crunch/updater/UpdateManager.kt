@@ -155,8 +155,15 @@ class UpdateManager(private val context: Context) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val appIcon = try {
+            android.graphics.BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher)
+        } catch (e: Exception) {
+            null
+        }
+
         val notification = NotificationCompat.Builder(context, CHANNEL_UPDATES_ID)
-            .setSmallIcon(R.drawable.ic_crunch_logo)
+            .setSmallIcon(R.drawable.ic_launcher_monochrome)
+            .setLargeIcon(appIcon)
             .setContentTitle("Crunch Engine Updated")
             .setContentText("yt-dlp updated to $newVersion for maximum site compatibility")
             .setStyle(

@@ -22,8 +22,10 @@ class DownloadForegroundService : Service() {
     override fun onCreate() {
         super.onCreate()
         createChannel()
+        val appIcon = android.graphics.BitmapFactory.decodeResource(resources, com.kappi.crunch.R.mipmap.ic_launcher)
         val notification = androidx.core.app.NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setSmallIcon(com.kappi.crunch.R.drawable.ic_launcher_monochrome)
+            .setLargeIcon(appIcon)
             .setContentTitle("Crunch")
             .setContentText("Downloads running in background")
             .build()
