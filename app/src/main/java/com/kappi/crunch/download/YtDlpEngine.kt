@@ -3,16 +3,20 @@ package com.kappi.crunch.download
 import android.content.Context
 import android.util.Log
 import com.kappi.crunch.data.FormatOption
+import com.kappi.crunch.data.PlaylistEntry
 import com.kappi.crunch.data.VideoInfo
+import com.kappi.crunch.util.FormatUtils
 import com.yausername.youtubedl_android.YoutubeDL
+import com.yausername.youtubedl_android.YoutubeDLException
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 import java.util.Locale
-import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.ReentrantReadWriteLock
 
 private const val TAG = "YtDlpEngine"
 
@@ -27,40 +31,102 @@ class YtDlpEngine(private val context: Context) {
         // Cache VideoInfo in memory for 10 minutes to make repeat/re-fetched links instantaneous (0ms)
         private val cache = ConcurrentHashMap<String, Pair<Long, VideoInfo>>()
         private const val CACHE_TTL_MS = 10 * 60 * 1000L
-    }
 
-    val isBinaryAvailable: Boolean
-        get() {
-            return try {
-                ensureInitialized()
-                true
-            } catch (e: Exception) {
-                false
+        /**
+         * yt-dlp updates replace the zipapp in place. Python imports modules from
+         * that archive lazily, so rewriting it while a fetch or download runs
+         * corrupts the running process ("ZipImportError: bad local file header").
+         * Fetches and downloads share the read lock; updates need the write lock.
+         */
+        private val engineLock = ReentrantReadWriteLock()
+
+        private fun <T> withEngineRead(block: () -> T): T {
+            val lock = engineLock.readLock()
+            lock.lock()
+            try {
+                return block()
+            } finally {
+                lock.unlock()
             }
         }
 
-    private fun ensureInitialized() {
-        try {
-            YoutubeDL.getInstance().init(context)
+        private fun isCorruptEngineError(message: String?): Boolean =
+            message != null && (
+                message.contains("ZipImportError") ||
+                    message.contains("bad local file header")
+                )
+
+        /** Stops a running yt-dlp process started with the given process id. */
+        fun cancelProcess(processId: String): Boolean = try {
+            YoutubeDL.getInstance().destroyProcessById(processId)
         } catch (e: Exception) {
-            Log.w(TAG, "YoutubeDL.init: ${e.message}")
+            Log.w(TAG, "cancelProcess($processId): ${e.message}")
+            false
+        }
+    }
+
+    @Volatile
+    private var initialized = false
+
+    val isBinaryAvailable: Boolean
+        get() = try {
+            ensureInitialized()
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "yt-dlp is not available: ${e.message}")
+            false
+        }
+
+    private fun ensureInitialized() {
+        if (initialized) return
+        synchronized(this) {
+            if (initialized) return
+            val lock = engineLock.writeLock()
+            lock.lock()
+            try {
+                EngineRepair.run(context.applicationContext)
+                YoutubeDL.getInstance().init(context.applicationContext)
+                initialized = true
+            } catch (t: Throwable) {
+                Log.e(TAG, "yt-dlp engine failed to initialize", t)
+                throw IllegalStateException("yt-dlp engine failed to initialize: ${t.message}", t)
+            } finally {
+                lock.unlock()
+            }
         }
     }
 
     fun getYtDlpVersion(): String? {
-        ensureInitialized()
         return try {
-            YoutubeDL.getInstance().version(context)
+            ensureInitialized()
+            withEngineRead { YoutubeDL.getInstance().version(context) }
         } catch (e: Exception) {
             Log.w(TAG, "getYtDlpVersion: ${e.message}")
             null
         }
     }
 
-    suspend fun updateYoutubeDL(): Pair<Boolean, String> = withContext(Dispatchers.IO) {
+    /**
+     * @param waitForIdle background updates should give up when a fetch or
+     * download is running instead of stalling the worker.
+     */
+    suspend fun updateYoutubeDL(waitForIdle: Boolean = true): Pair<Boolean, String> = withContext(Dispatchers.IO) {
         ensureInitialized()
-        val oldVersion = getYtDlpVersion() ?: "Unknown"
+
+        val lock = engineLock.writeLock()
+        val acquired = try {
+            if (waitForIdle) lock.tryLock(5, TimeUnit.SECONDS) else lock.tryLock()
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
+        }
+        if (!acquired) {
+            Log.i(TAG, "updateYoutubeDL skipped: engine is busy")
+            return@withContext Pair(false, "yt-dlp is busy; update postponed")
+        }
+
         try {
+            val oldVersion = getYtDlpVersion() ?: "Unknown"
             val status = YoutubeDL.getInstance().updateYoutubeDL(context, YoutubeDL.UpdateChannel.STABLE)
             val newVersion = getYtDlpVersion() ?: oldVersion
             if (status == YoutubeDL.UpdateStatus.DONE) {
@@ -70,21 +136,27 @@ class YtDlpEngine(private val context: Context) {
             }
         } catch (e: Exception) {
             Log.e(TAG, "updateYoutubeDL error", e)
-            Pair(false, "Update failed: ${e.message ?: "Network error"}")
+            Pair(false, "Update failed: ${FormatUtils.conciseError(e.message)}")
+        } finally {
+            lock.unlock()
         }
     }
 
-    suspend fun downloadBinary(onProgress: (Float) -> Unit) = withContext(Dispatchers.IO) {
-        ensureInitialized()
-        onProgress(0.5f)
+    /**
+     * Runs an engine call under the read lock. If the zipapp turns out to be
+     * corrupt (for example an update interrupted by the OS), restore the copy
+     * bundled in the APK and retry once.
+     */
+    private fun <T> runEngine(block: () -> T): T {
         try {
-            YoutubeDL.getInstance().updateYoutubeDL(context, YoutubeDL.UpdateChannel.STABLE)
-        } catch (e: Exception) {
-            Log.w(TAG, "Update check: ${e.message}")
+            return withEngineRead(block)
+        } catch (e: YoutubeDLException) {
+            if (!isCorruptEngineError(e.message)) throw e
+            Log.w(TAG, "yt-dlp archive is corrupt; restoring bundled copy and retrying", e)
+            if (!EngineRepair.restoreYtDlp(context.applicationContext)) throw e
+            return withEngineRead(block)
         }
-        onProgress(1.0f)
     }
-
 
     private fun isLikelyPlaylist(url: String): Boolean {
         val lower = url.lowercase()
@@ -128,11 +200,16 @@ class YtDlpEngine(private val context: Context) {
             addOption("--no-check-certificates")
             addOption("--socket-timeout", "10")
             addOption("--geo-bypass")
-            addOption("--extractor-args", "youtube:player_client=android,web")
         }
 
-        val response = YoutubeDL.getInstance().execute(request)
-        val output = response.out ?: throw IllegalStateException("Empty output from yt-dlp")
+        val response = try {
+            runEngine { YoutubeDL.getInstance().execute(request) }
+        } catch (e: Exception) {
+            Log.e(TAG, "fetchInfo failed for $cleanUrl", e)
+            throw e
+        }
+        val output = response.out
+        if (output.isBlank()) throw IllegalStateException("Empty output from yt-dlp")
 
         val lines = output.lines().filter { it.trimStart().startsWith("{") }
         if (lines.isEmpty()) throw IllegalStateException("No JSON output from yt-dlp")
@@ -144,7 +221,6 @@ class YtDlpEngine(private val context: Context) {
                 lines.size > 1
 
         val info = parseVideoInfo(cleanUrl, output, isPlaylist)
-
         // 3. Cache the parsed info
         if (cache.size > 50) cache.clear()
         cache[cleanUrl] = Pair(System.currentTimeMillis(), info)
@@ -246,7 +322,7 @@ class YtDlpEngine(private val context: Context) {
                     }
                     val fpsStr = if (vf.fps >= 50) " ${vf.fps}fps" else ""
                     val extStr = if (vf.ext.isNotEmpty()) " • ${vf.ext.uppercase()}" else ""
-                    val sizeStr = if (vf.filesize > 0) " • ${formatFilesize(vf.filesize)}" else ""
+                    val sizeStr = if (vf.filesize > 0) " • ${FormatUtils.formatFilesize(vf.filesize)}" else ""
                     val displayLabel = "$qName$fpsStr$extStr$sizeStr"
 
                     videoFormats.add(
@@ -297,7 +373,7 @@ class YtDlpEngine(private val context: Context) {
                         af.ext.isNotEmpty() -> af.ext.uppercase()
                         else -> "Audio"
                     }
-                    val sizeStr = if (af.filesize > 0) " • ${formatFilesize(af.filesize)}" else ""
+                    val sizeStr = if (af.filesize > 0) " • ${FormatUtils.formatFilesize(af.filesize)}" else ""
                     val audioLabel = if (bitrate > 0) {
                         if (tier.isNotEmpty()) "$bitrate kbps ($tier • $codec)$sizeStr"
                         else "$bitrate kbps ($codec)$sizeStr"
@@ -320,6 +396,8 @@ class YtDlpEngine(private val context: Context) {
             autoSubs?.keys()?.forEach { autoSubLangs.add(it) }
         }
 
+        val playlistEntries = if (isPlaylist) parsePlaylistEntries(firstObj, lines) else emptyList()
+
         return VideoInfo(
             url = url,
             title = firstObj.optString("title", "Unknown title"),
@@ -328,24 +406,55 @@ class YtDlpEngine(private val context: Context) {
             duration = firstObj.optLong("duration", 0L),
             description = firstObj.optString("description", ""),
             isPlaylist = isPlaylist,
-            playlistCount = if (isPlaylist) lines.size else 1,
+            playlistCount = if (playlistEntries.isNotEmpty()) playlistEntries.size else lines.size,
             playlistId = firstObj.optString("playlist_id", ""),
             formats = formats,
             videoFormats = videoFormats,
             audioFormats = audioFormats,
             subtitleLanguages = subtitleLangs,
             autoSubtitleLanguages = autoSubLangs,
+            playlistEntries = playlistEntries,
         )
     }
 
-    private fun formatFilesize(bytes: Long): String {
-        if (bytes <= 0) return ""
-        val mb = bytes.toDouble() / (1024 * 1024)
-        return if (mb >= 1000) {
-            String.format(Locale.getDefault(), "%.1f GB", mb / 1024)
+    private fun parsePlaylistEntries(firstObj: JSONObject, lines: List<String>): List<PlaylistEntry> {
+        val entries = mutableListOf<PlaylistEntry>()
+
+        // Non-flat metadata returns a single playlist object with an "entries" array.
+        val array = firstObj.optJSONArray("entries")
+        if (array != null) {
+            for (i in 0 until array.length()) {
+                array.optJSONObject(i)?.let { entries.add(it.toPlaylistEntry()) }
+            }
         } else {
-            String.format(Locale.getDefault(), "%.0f MB", mb)
+            // --flat-playlist emits one JSON object per entry.
+            for (line in lines) {
+                val obj = runCatching { JSONObject(line) }.getOrNull() ?: continue
+                if (obj.optString("_type") == "playlist") continue
+                entries.add(obj.toPlaylistEntry())
+            }
         }
+
+        return entries.filter { it.url.isNotBlank() }
+    }
+
+    private fun JSONObject.toPlaylistEntry(): PlaylistEntry {
+        val entryUrl = optString("webpage_url").ifEmpty { optString("url") }
+        val thumb = optString("thumbnail").ifEmpty {
+            val thumbs = optJSONArray("thumbnails")
+            if (thumbs != null && thumbs.length() > 0) {
+                thumbs.optJSONObject(thumbs.length() - 1)?.optString("url", "") ?: ""
+            } else {
+                ""
+            }
+        }
+        return PlaylistEntry(
+            url = entryUrl,
+            title = optString("title", "Untitled"),
+            uploader = optString("uploader", optString("channel", "")),
+            duration = optLong("duration", 0L),
+            thumbnailUrl = thumb,
+        )
     }
 
     suspend fun download(
@@ -362,6 +471,7 @@ class YtDlpEngine(private val context: Context) {
         useExternalDownloader: Boolean,
         downloadThreads: Int = 16,
         customExtraArgs: String,
+        processId: String = java.util.UUID.randomUUID().toString(),
         onProgress: (progress: Float, speed: String, eta: String) -> Unit,
     ): String = withContext(Dispatchers.IO) {
         ensureInitialized()
@@ -423,44 +533,45 @@ class YtDlpEngine(private val context: Context) {
         }
 
         if (customExtraArgs.isNotBlank()) {
-            for (arg in splitArgs(customExtraArgs)) {
+            for (arg in FormatUtils.splitArgs(customExtraArgs)) {
                 request.addOption(arg)
             }
         }
 
         var lastFilePath = ""
-        val processId = UUID.randomUUID().toString()
 
-        YoutubeDL.getInstance().execute(request, processId) { progress, etaInSeconds, line ->
-            if (line.isNotEmpty()) {
-                Log.v(TAG, line)
-                var speedStr = ""
-                if (line.contains("at") && line.contains("/s")) {
-                    speedStr = line.substringAfter("at").substringBefore("ETA").trim()
-                }
-                val etaStr = if (etaInSeconds > 0) {
-                    val m = etaInSeconds / 60
-                    val s = etaInSeconds % 60
-                    String.format(Locale.getDefault(), "%02d:%02d", m, s)
-                } else ""
+        runEngine {
+            YoutubeDL.getInstance().execute(request, processId) { progress, etaInSeconds, line ->
+                if (line.isNotEmpty()) {
+                    Log.v(TAG, line)
+                    var speedStr = ""
+                    if (line.contains("at") && line.contains("/s")) {
+                        speedStr = line.substringAfter("at").substringBefore("ETA").trim()
+                    }
+                    val etaStr = if (etaInSeconds > 0) {
+                        val m = etaInSeconds / 60
+                        val s = etaInSeconds % 60
+                        String.format(Locale.getDefault(), "%02d:%02d", m, s)
+                    } else ""
 
-                onProgress(progress / 100f, speedStr, etaStr)
+                    onProgress(progress / 100f, speedStr, etaStr)
 
-                if (line.startsWith("[download] Destination:") ||
-                    line.startsWith("[Merger] Merging") ||
-                    line.contains("Remuxing video")) {
-                    val path = when {
-                        line.contains("Merging formats into") -> line.substringAfter("Merging formats into")
-                        line.contains(" to \"") -> line.substringAfter(" to \"").substringBefore("\"")
-                        line.contains(" to ") -> line.substringAfter(" to ")
-                        line.startsWith("[download] Destination:") -> line.substringAfter("Destination:")
-                        else -> ""
-                    }.trim().removeSurrounding("\"")
-                    if (path.isNotEmpty()) lastFilePath = path
-                }
-                if (line.startsWith("[ExtractAudio]")) {
-                    val path = line.substringAfter("Destination:").trim()
-                    if (path.isNotEmpty()) lastFilePath = path
+                    if (line.startsWith("[download] Destination:") ||
+                        line.startsWith("[Merger] Merging") ||
+                        line.contains("Remuxing video")) {
+                        val path = when {
+                            line.contains("Merging formats into") -> line.substringAfter("Merging formats into")
+                            line.contains(" to \"") -> line.substringAfter(" to \"").substringBefore("\"")
+                            line.contains(" to ") -> line.substringAfter(" to ")
+                            line.startsWith("[download] Destination:") -> line.substringAfter("Destination:")
+                            else -> ""
+                        }.trim().removeSurrounding("\"")
+                        if (path.isNotEmpty()) lastFilePath = path
+                    }
+                    if (line.startsWith("[ExtractAudio]")) {
+                        val path = line.substringAfter("Destination:").trim()
+                        if (path.isNotEmpty()) lastFilePath = path
+                    }
                 }
             }
         }
@@ -476,24 +587,5 @@ class YtDlpEngine(private val context: Context) {
             }
         }
         lastFilePath
-    }
-
-    private fun splitArgs(input: String): List<String> {
-        val result = mutableListOf<String>()
-        val current = StringBuilder()
-        var inQuote = false
-        var quoteChar = ' '
-        for (c in input) {
-            when {
-                !inQuote && (c == '"' || c == '\'') -> { inQuote = true; quoteChar = c }
-                inQuote && c == quoteChar -> { inQuote = false }
-                !inQuote && c == ' ' -> {
-                    if (current.isNotEmpty()) { result.add(current.toString()); current.clear() }
-                }
-                else -> current.append(c)
-            }
-        }
-        if (current.isNotEmpty()) result.add(current.toString())
-        return result
     }
 }

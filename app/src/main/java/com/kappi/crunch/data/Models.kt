@@ -61,6 +61,18 @@ data class FormatOption(
 )
 
 /**
+ * One video inside a playlist. Flat playlist entries have no per-format
+ * metadata, so they are downloaded with the selected/default format string.
+ */
+data class PlaylistEntry(
+    val url: String,
+    val title: String,
+    val uploader: String = "",
+    val duration: Long = 0L,
+    val thumbnailUrl: String = "",
+)
+
+/**
  * Metadata fetched from yt-dlp --dump-json for a URL.
  */
 data class VideoInfo(
@@ -78,6 +90,7 @@ data class VideoInfo(
     val audioFormats: List<FormatOption> = emptyList(),
     val subtitleLanguages: List<String>,       // available subtitle langs
     val autoSubtitleLanguages: List<String>,   // auto-generated langs
+    val playlistEntries: List<PlaylistEntry> = emptyList(),
 )
 
 /**

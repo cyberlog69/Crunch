@@ -9,14 +9,15 @@ import androidx.lifecycle.viewModelScope
 import com.kappi.crunch.data.*
 import com.kappi.crunch.download.DownloadManager
 import com.kappi.crunch.download.YtDlpEngine
+import com.kappi.crunch.util.FormatUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 
 sealed interface HomeUiState {
     data object Idle : HomeUiState
-    data object FetchingBinary : HomeUiState
     data object FetchingInfo : HomeUiState
     data class InfoReady(val info: VideoInfo) : HomeUiState
     data class Error(val message: String) : HomeUiState
@@ -47,14 +48,14 @@ class HomeViewModel(
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Idle)
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
+    // Guards against double taps enqueuing the same video/playlist twice.
+    private val isEnqueuing = AtomicBoolean(false)
+
     private val _urlInput = MutableStateFlow("")
     val urlInput: StateFlow<String> = _urlInput.asStateFlow()
 
     private val _downloadOptions = MutableStateFlow(DownloadOptions(useExternalDownloader = prefs.useFastDownloader))
     val downloadOptions: StateFlow<DownloadOptions> = _downloadOptions.asStateFlow()
-
-    private val _binaryProgress = MutableStateFlow(0f)
-    val binaryProgress: StateFlow<Float> = _binaryProgress.asStateFlow()
 
     // Expose templates for the UI
     val templates: List<CommandTemplate> get() = prefs.commandTemplates
@@ -76,15 +77,14 @@ class HomeViewModel(
             return
         }
         viewModelScope.launch(Dispatchers.IO) {
-            // Ensure binary is available
+            // yt-dlp is bundled as a native library; if it cannot initialize the
+            // app is unusable, so surface that instead of pretending to fetch it.
             if (!engine.isBinaryAvailable) {
-                _uiState.value = HomeUiState.FetchingBinary
-                try {
-                    engine.downloadBinary { progress -> _binaryProgress.value = progress }
-                } catch (e: Exception) {
-                    _uiState.value = HomeUiState.Error("Failed to download yt-dlp: ${e.message}")
-                    return@launch
-                }
+                _uiState.value = HomeUiState.Error(
+                    "The yt-dlp engine could not be initialized on this device. " +
+                        "Check that the installed APK matches your device ABI."
+                )
+                return@launch
             }
 
             _uiState.value = HomeUiState.FetchingInfo
@@ -109,7 +109,10 @@ class HomeViewModel(
                     useExternalDownloader = prefs.useFastDownloader,
                 )
             } catch (e: Exception) {
-                _uiState.value = HomeUiState.Error("Could not fetch info: ${e.message}")
+                Log.e("HomeViewModel", "Error fetching info for $url", e)
+                _uiState.value = HomeUiState.Error(
+                    "Could not fetch info: ${FormatUtils.conciseError(e.message)}"
+                )
             }
         }
     }
@@ -157,6 +160,7 @@ class HomeViewModel(
 
     fun onDownloadClicked() {
         val infoState = _uiState.value as? HomeUiState.InfoReady ?: return
+        if (!isEnqueuing.compareAndSet(false, true)) return
         val info = infoState.info
         val opts = _downloadOptions.value
 
@@ -191,18 +195,31 @@ class HomeViewModel(
 
                 if (info.isPlaylist) {
                     val playlistId = UUID.randomUUID().toString()
-                    enqueueItem(
-                        url = info.url,
-                        title = info.title,
-                        uploader = info.uploader,
-                        thumbnailUrl = info.thumbnailUrl,
-                        duration = info.duration,
-                        opts = opts,
-                        formatId = formatId,
-                        formatLabel = formatLabel,
-                        playlistId = playlistId,
-                        playlistIndex = 0,
-                    )
+                    val entries = info.playlistEntries.ifEmpty {
+                        listOf(
+                            PlaylistEntry(
+                                url = info.url,
+                                title = info.title,
+                                uploader = info.uploader,
+                                duration = info.duration,
+                                thumbnailUrl = info.thumbnailUrl,
+                            )
+                        )
+                    }
+                    entries.forEachIndexed { index, entry ->
+                        enqueueItem(
+                            url = entry.url,
+                            title = entry.title,
+                            uploader = entry.uploader.ifEmpty { info.uploader },
+                            thumbnailUrl = entry.thumbnailUrl.ifEmpty { info.thumbnailUrl },
+                            duration = entry.duration,
+                            opts = opts,
+                            formatId = formatId,
+                            formatLabel = formatLabel,
+                            playlistId = playlistId,
+                            playlistIndex = index,
+                        )
+                    }
                 } else {
                     enqueueItem(
                         url = info.url,
@@ -221,6 +238,8 @@ class HomeViewModel(
             } catch (e: Exception) {
                 Log.e("HomeViewModel", "Error enqueueing download", e)
                 _uiState.value = HomeUiState.Error("Failed to start download: ${e.localizedMessage ?: "Unknown error"}")
+            } finally {
+                isEnqueuing.set(false)
             }
         }
     }

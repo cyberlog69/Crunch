@@ -9,6 +9,7 @@ import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.work.*
+import com.kappi.crunch.BuildConfig
 import com.kappi.crunch.MainActivity
 import com.kappi.crunch.R
 import com.kappi.crunch.data.UserPreferences
@@ -44,24 +45,36 @@ class UpdateManager(private val context: Context) {
     private val engine = YtDlpEngine(context)
 
     fun getComponentVersions(): ComponentVersionInfo {
-        val ytdlp = engine.getYtDlpVersion() ?: "2025.11.12"
+        val ytdlp = engine.getYtDlpVersion() ?: "unknown"
         return ComponentVersionInfo(
             ytdlpVersion = ytdlp,
             ffmpegVersion = "7.1.1 (Native NDK)",
             aria2cVersion = "1.37.0 (Native NDK)",
-            appVersion = "1.0",
+            appVersion = BuildConfig.VERSION_NAME,
             lastCheckedTimestamp = prefs.lastUpdateCheck,
         )
     }
 
     suspend fun checkAndUpdateEngine(manual: Boolean = false): EngineUpdateResult = withContext(Dispatchers.IO) {
-        val oldVer = engine.getYtDlpVersion() ?: "2025.11.12"
+        val oldVer = engine.getYtDlpVersion() ?: "unknown"
         Log.i(TAG, "Checking for yt-dlp updates. Current version: $oldVer")
 
         try {
-            val (updated, msg) = engine.updateYoutubeDL()
-            val newVer = engine.getYtDlpVersion() ?: oldVer
+            val (updated, msg) = engine.updateYoutubeDL(waitForIdle = manual)
             prefs.lastUpdateCheck = System.currentTimeMillis()
+
+            if (msg.contains("postponed")) {
+                Log.i(TAG, "Engine update postponed: a fetch or download is running")
+                return@withContext EngineUpdateResult(
+                    isUpdated = false,
+                    currentVersion = oldVer,
+                    previousVersion = oldVer,
+                    message = "Update postponed: yt-dlp is busy with an active download",
+                    isSuccess = false
+                )
+            }
+
+            val newVer = engine.getYtDlpVersion() ?: oldVer
 
             if (updated) {
                 Log.i(TAG, "yt-dlp updated: $oldVer -> $newVer")
@@ -162,7 +175,7 @@ class UpdateManager(private val context: Context) {
         }
 
         val notification = NotificationCompat.Builder(context, CHANNEL_UPDATES_ID)
-            .setSmallIcon(R.drawable.ic_launcher_monochrome)
+            .setSmallIcon(R.drawable.ic_stat_crunch)
             .setLargeIcon(appIcon)
             .setContentTitle("Crunch Engine Updated")
             .setContentText("yt-dlp updated to $newVersion for maximum site compatibility")

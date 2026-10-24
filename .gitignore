@@ -16,3 +16,8 @@ app/build/
 build_output.txt
 *.apk
 *.aab
+
+# Release signing material — never commit these.
+keystore.properties
+*.jks
+*.keystore

@@ -43,6 +43,9 @@ object DownloadManager {
      * Cancels a running or queued download by download ID.
      */
     fun cancelById(context: Context, downloadId: String) {
+        // Kill the native yt-dlp process first; cancelling the coroutine alone
+        // does not interrupt the blocking process call.
+        YtDlpEngine.cancelProcess(downloadId)
         WorkManager.getInstance(context).cancelAllWorkByTag(downloadId)
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
         nm.cancel(1000 + downloadId.hashCode())

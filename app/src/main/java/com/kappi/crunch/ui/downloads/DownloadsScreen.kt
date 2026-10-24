@@ -1,7 +1,6 @@
 package com.kappi.crunch.ui.downloads
 
 import android.content.Intent
-import android.net.Uri
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -21,7 +20,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
@@ -30,7 +28,8 @@ import com.kappi.crunch.data.DownloadItem
 import com.kappi.crunch.data.DownloadStatus
 import com.kappi.crunch.data.DownloadType
 import com.kappi.crunch.theme.*
-import java.io.File
+import com.kappi.crunch.util.FileLocation
+import com.kappi.crunch.util.FormatUtils
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -39,8 +38,9 @@ fun DownloadsScreen(
     viewModel: DownloadsViewModel = viewModel(),
     modifier: Modifier = Modifier,
 ) {
-    val active by viewModel.activeDownloads.collectAsStateWithLifecycle()
-    val completed by viewModel.completedDownloads.collectAsStateWithLifecycle()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val active = state.active
+    val completed = state.completed
 
     if (active.isEmpty() && completed.isEmpty()) {
         EmptyState(modifier = modifier.fillMaxSize())
@@ -111,7 +111,8 @@ private fun DownloadCard(
 
     if (showDeleteDialog) {
         DeleteConfirmDialog(
-            hasFile = item.filePath.isNotEmpty() && File(item.filePath).exists(),
+            hasFile = item.filePath.isNotEmpty() &&
+                (item.fileSize > 0 || FileLocation.exists(context, item.filePath)),
             onDismiss = { showDeleteDialog = false },
             onConfirm = { deleteFile ->
                 showDeleteDialog = false
@@ -301,31 +302,17 @@ private fun DownloadCard(
                     }
                     DownloadStatus.COMPLETED -> {
                         // Open file
-                        val fileExists = item.filePath.isNotEmpty() && File(item.filePath).exists()
+                        val fileExists = item.filePath.isNotEmpty() &&
+                            (item.fileSize > 0 || FileLocation.exists(context, item.filePath))
                         if (fileExists) {
-                            val file = File(item.filePath)
-                            val mimeType = when {
-                                file.extension.equals("mkv", ignoreCase = true) -> "video/x-matroska"
-                                file.extension.equals("mp4", ignoreCase = true) -> "video/mp4"
-                                file.extension.equals("webm", ignoreCase = true) -> "video/webm"
-                                file.extension.equals("mp3", ignoreCase = true) -> "audio/mpeg"
-                                file.extension.equals("m4a", ignoreCase = true) -> "audio/mp4"
-                                file.extension.equals("opus", ignoreCase = true) -> "audio/opus"
-                                file.extension.equals("flac", ignoreCase = true) -> "audio/flac"
-                                file.extension.equals("wav", ignoreCase = true) -> "audio/wav"
-                                else -> "*/*"
-                            }
+                            val mimeType = FormatUtils.mimeTypeFor(item.filePath)
                             TextButton(onClick = {
-                                val uri = FileProvider.getUriForFile(
-                                    context,
-                                    "${context.packageName}.provider",
-                                    file,
-                                )
+                                val uri = FileLocation.toUri(context, item.filePath) ?: return@TextButton
                                 val intent = Intent(Intent.ACTION_VIEW).apply {
                                     setDataAndType(uri, mimeType)
                                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                 }
-                                context.startActivity(intent)
+                                runCatching { context.startActivity(intent) }
                             }) {
                                 Icon(Icons.Filled.PlayArrow, contentDescription = null, Modifier.size(16.dp))
                                 Spacer(Modifier.width(4.dp))
@@ -333,14 +320,15 @@ private fun DownloadCard(
                             }
                             // Share
                             TextButton(onClick = {
-                                val uri = FileProvider.getUriForFile(
-                                    context, "${context.packageName}.provider", file)
+                                val uri = FileLocation.toUri(context, item.filePath) ?: return@TextButton
                                 val intent = Intent(Intent.ACTION_SEND).apply {
                                     type = mimeType
                                     putExtra(Intent.EXTRA_STREAM, uri)
                                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                 }
-                                context.startActivity(Intent.createChooser(intent, "Share"))
+                                runCatching {
+                                    context.startActivity(Intent.createChooser(intent, "Share"))
+                                }
                             }) {
                                 Icon(Icons.Filled.Share, contentDescription = null, Modifier.size(16.dp))
                                 Spacer(Modifier.width(4.dp))

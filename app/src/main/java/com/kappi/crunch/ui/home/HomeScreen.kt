@@ -48,7 +48,6 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val urlInput by viewModel.urlInput.collectAsStateWithLifecycle()
     val opts by viewModel.downloadOptions.collectAsStateWithLifecycle()
-    val binaryProgress by viewModel.binaryProgress.collectAsStateWithLifecycle()
     val clipboard = LocalClipboardManager.current
     val focusManager = LocalFocusManager.current
 
@@ -148,7 +147,7 @@ fun HomeScreen(
             },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
-            enabled = uiState !is HomeUiState.FetchingInfo && uiState !is HomeUiState.FetchingBinary,
+            enabled = uiState !is HomeUiState.FetchingInfo,
         ) {
             Icon(Icons.Filled.Search, contentDescription = null)
             Spacer(Modifier.width(8.dp))
@@ -156,21 +155,6 @@ fun HomeScreen(
         }
 
         // ── Status indicators ─────────────────────────────────────────────
-        AnimatedVisibility(uiState is HomeUiState.FetchingBinary) {
-            Column(Modifier.padding(top = 16.dp)) {
-                Text(
-                    text = stringResource(R.string.downloading_ytdlp),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(8.dp))
-                LinearProgressIndicator(
-                    progress = { binaryProgress },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        }
-
         AnimatedVisibility(uiState is HomeUiState.FetchingInfo) {
             Row(
                 modifier = Modifier.padding(top = 16.dp),
@@ -601,22 +585,6 @@ private fun VideoInfoCard(
         }
         Spacer(Modifier.height(48.dp))
     }
-}
-
-@Composable
-private fun DownloadTypeChip(
-    label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    FilterChip(
-        selected = selected,
-        onClick = onClick,
-        label = { Text(label) },
-        leadingIcon = { Icon(icon, contentDescription = null, Modifier.size(18.dp)) },
-        shape = RoundedCornerShape(12.dp),
-    )
 }
 
 @Composable

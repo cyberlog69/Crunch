@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
-    <external-files-path name="downloads" path="Downloads/Crunch/" />
+    <!-- App-private staging files (used before publishing to Downloads) -->
+    <external-files-path name="staging" path="Download/Crunch/" />
+    <!-- Public Downloads/Crunch files on legacy (API 26-28) storage -->
+    <external-path name="public_downloads" path="Download/Crunch/" />
     <files-path name="internal" path="." />
-    <external-path name="external_storage" path="." />
 </paths>

@@ -1,8 +1,6 @@
 package com.kappi.crunch.ui.settings
 
 import android.content.Intent
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -33,12 +31,6 @@ fun SettingsScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     var showAddTemplateSheet by remember { mutableStateOf(false) }
 
-    val folderPickerLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocumentTree()
-    ) { uri ->
-        uri?.let { viewModel.setOutputFolder(it.path ?: it.toString()) }
-    }
-
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -55,13 +47,17 @@ fun SettingsScreen(
 
         // ── Download folder ───────────────────────────────────────────
         SettingsSection(title = "Storage") {
-            SettingsItem(
-                title = stringResource(R.string.settings_output_folder),
-                subtitle = state.outputFolder.ifEmpty { "Default (Downloads/Crunch)" },
-                icon = Icons.Outlined.Folder,
-                onClick = {
-                    folderPickerLauncher.launch(null)
-                }
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.settings_output_folder)) },
+                supportingContent = { Text("Downloads/Crunch • visible in the Files app") },
+                leadingContent = {
+                    Icon(
+                        Icons.Outlined.Folder,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
         }
 
@@ -232,64 +228,6 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(start = 4.dp)
                 )
-            }
-            HorizontalDivider(Modifier.padding(start = 56.dp))
-            // Max concurrent downloads
-            Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        Icons.Outlined.Layers, contentDescription = null,
-                        modifier = Modifier.size(24.dp),
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                    Spacer(Modifier.width(16.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            stringResource(R.string.settings_max_concurrent),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Text(
-                            "${state.maxConcurrent} simultaneous tasks",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier
-                            .background(
-                                MaterialTheme.colorScheme.surfaceVariant,
-                                RoundedCornerShape(12.dp)
-                            )
-                            .padding(4.dp)
-                    ) {
-                        FilledTonalIconButton(
-                            onClick = { if (state.maxConcurrent > 1) viewModel.setMaxConcurrent(state.maxConcurrent - 1) },
-                            enabled = state.maxConcurrent > 1,
-                            modifier = Modifier.size(32.dp),
-                            shape = CircleShape,
-                        ) {
-                            Icon(Icons.Filled.Remove, contentDescription = "Decrease", Modifier.size(16.dp))
-                        }
-                        Text(
-                            "${state.maxConcurrent}",
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(horizontal = 10.dp),
-                        )
-                        FilledTonalIconButton(
-                            onClick = { if (state.maxConcurrent < 5) viewModel.setMaxConcurrent(state.maxConcurrent + 1) },
-                            enabled = state.maxConcurrent < 5,
-                            modifier = Modifier.size(32.dp),
-                            shape = CircleShape,
-                        ) {
-                            Icon(Icons.Filled.Add, contentDescription = "Increase", Modifier.size(16.dp))
-                        }
-                    }
-                }
             }
         }
 
@@ -608,7 +546,7 @@ fun SettingsScreen(
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Version 1.0 • Powered by yt-dlp, FFmpeg & aria2c",
+                    "Version ${state.appVersion} • Powered by yt-dlp, FFmpeg & aria2c",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
                 )
@@ -650,28 +588,6 @@ private fun SettingsSection(
     ) {
         Column(content = content)
     }
-}
-
-@Composable
-private fun SettingsItem(
-    title: String,
-    subtitle: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    onClick: () -> Unit,
-) {
-    ListItem(
-        headlineContent = { Text(title) },
-        supportingContent = { Text(subtitle) },
-        leadingContent = {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-        },
-        trailingContent = {
-            Icon(Icons.Filled.ChevronRight, contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        },
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        modifier = Modifier.clickable(onClick = onClick),
-    )
 }
 
 @Composable

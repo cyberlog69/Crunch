@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Adaptive icon background. A plain colour keeps the icon renderable by
+     OEM launchers and notification icon loaders, which do not all handle
+     shape drawables in an adaptive icon. -->
+<resources>
+    <color name="ic_launcher_background">#12161C</color>
+</resources>

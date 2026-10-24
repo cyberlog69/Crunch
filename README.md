@@ -15,6 +15,10 @@ A modern, high-performance media and video stream downloader for Android, built 
   - Manual "Check for Updates" in Settings with real-time feedback.
 - **🎬 Remux & MKV Optimization**:
   - Automatic remuxing and container conversion into `.mkv` (or `.mp4`) after downloading for maximum compatibility and subtitle preservation.
+- **📂 Public Downloads Folder**:
+  - Finished files are published to the public `Downloads/Crunch` folder (MediaStore on Android 10+), so they show up in the Files app and gallery.
+- **📃 Real Playlist Support**:
+  - Playlist links are expanded into individual downloads, all grouped under one playlist id.
 - **📲 Seamless System Share Sheet Support**:
   - Tap "Share" from YouTube, Instagram, Facebook, Reddit, TikTok, or browser and select Crunch to instantly parse and fetch video metadata.
 - **🔔 Foreground & Completed Notifications**:
@@ -46,12 +50,49 @@ A modern, high-performance media and video stream downloader for Android, built 
 git clone https://github.com/cyberlog69/Crunch.git
 cd Crunch
 
-# Assemble debug APK
+# Assemble debug APK (universal, all ABIs)
 ./gradlew assembleDebug
+
+# Assemble release APKs (minified + per-ABI splits + universal)
+./gradlew assembleRelease
 ```
 
-The APK will be generated at:
+The debug APK will be generated at:
 `app/build/outputs/apk/debug/app-debug.apk`
+
+### Release builds
+
+Release builds run R8 (`isMinifyEnabled` + `isShrinkResources`), so the app is
+shrunk and obfuscated. ABI splits produce one APK per architecture plus a
+universal fallback:
+
+```
+app/build/outputs/apk/release/app-arm64-v8a-release.apk
+app/build/outputs/apk/release/app-armeabi-v7a-release.apk
+app/build/outputs/apk/release/app-x86-release.apk
+app/build/outputs/apk/release/app-x86_64-release.apk
+app/build/outputs/apk/release/app-universal-release.apk
+```
+
+Unsigned builds get an `-unsigned` suffix in the file name instead.
+
+Most devices only need `app-arm64-v8a-release.apk`; the universal APK is the
+safe fallback for sideloading on unknown hardware.
+
+Signing is optional for local builds. To sign a release, either copy
+`keystore.properties.example` to `keystore.properties` (gitignored) and point
+`storeFile` at your keystore, or export the `CRUNCH_*` environment variables
+listed in that example:
+
+```bash
+export CRUNCH_KEYSTORE_FILE=/path/to/release.jks
+export CRUNCH_KEYSTORE_PASSWORD=...
+export CRUNCH_KEY_ALIAS=crunch
+export CRUNCH_KEY_PASSWORD=...
+./gradlew assembleRelease
+```
+
+Without signing material the release APKs are still produced, but unsigned.
 
 ---
 

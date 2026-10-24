@@ -3,6 +3,7 @@ package com.kappi.crunch.ui.settings
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.kappi.crunch.BuildConfig
 import com.kappi.crunch.data.CommandTemplate
 import com.kappi.crunch.data.UserPreferences
 import com.kappi.crunch.updater.UpdateManager
@@ -13,22 +14,20 @@ import kotlinx.coroutines.withContext
 import java.util.UUID
 
 data class SettingsState(
-    val outputFolder: String = "",
     val useFastDownloader: Boolean = true,
     val downloadThreads: Int = 16,
     val embedThumbnail: Boolean = true,
     val embedMetadata: Boolean = true,
-    val maxConcurrent: Int = 2,
     val defaultAudioFormat: String = "mp3",
     val defaultVideoContainer: String = "mkv",
     val commandTemplates: List<CommandTemplate> = emptyList(),
     // Engine & Updates
     val autoUpdateEngine: Boolean = true,
     val updateWifiOnly: Boolean = true,
-    val ytdlpVersion: String = "2025.11.12",
+    val ytdlpVersion: String = "unknown",
     val ffmpegVersion: String = "7.1.1 (Native)",
     val aria2cVersion: String = "1.37.0 (Native)",
-    val appVersion: String = "1.0",
+    val appVersion: String = BuildConfig.VERSION_NAME,
     val lastUpdateCheckTime: Long = 0L,
     val isCheckingUpdate: Boolean = false,
     val updateStatusMessage: String? = null,
@@ -42,12 +41,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     private val _state = MutableStateFlow(
         SettingsState(
-            outputFolder = prefs.outputFolder,
             useFastDownloader = prefs.useFastDownloader,
             downloadThreads = prefs.downloadThreads,
             embedThumbnail = prefs.embedThumbnail,
             embedMetadata = prefs.embedMetadata,
-            maxConcurrent = prefs.maxConcurrentDownloads,
             defaultAudioFormat = prefs.defaultAudioFormat,
             defaultVideoContainer = prefs.defaultVideoContainer,
             commandTemplates = prefs.commandTemplates,
@@ -121,11 +118,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         _state.update { it.copy(updateStatusMessage = null, isUpdateSuccess = null) }
     }
 
-    fun setOutputFolder(path: String) {
-        prefs.outputFolder = path
-        _state.update { it.copy(outputFolder = path) }
-    }
-
     fun setFastDownloader(enabled: Boolean) {
         prefs.useFastDownloader = enabled
         _state.update { it.copy(useFastDownloader = enabled) }
@@ -144,11 +136,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setEmbedMetadata(embed: Boolean) {
         prefs.embedMetadata = embed
         _state.update { it.copy(embedMetadata = embed) }
-    }
-
-    fun setMaxConcurrent(n: Int) {
-        prefs.maxConcurrentDownloads = n
-        _state.update { it.copy(maxConcurrent = n) }
     }
 
     fun setDefaultAudioFormat(fmt: String) {

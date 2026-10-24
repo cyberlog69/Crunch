@@ -1,9 +1,31 @@
+import java.util.Properties
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.compose.compiler)
   alias(libs.plugins.kotlin.serialization)
   alias(libs.plugins.legacy.kapt)
 }
+
+// Release signing is optional. Values come from keystore.properties (ignored by
+// git) or from CRUNCH_* environment variables, so CI can sign without a file
+// and a fresh clone can still run `assembleRelease` unsigned.
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) {
+        file.inputStream().use { load(it) }
+    }
+}
+
+fun signingValue(property: String, environment: String): String? =
+    (System.getenv(environment) ?: keystoreProperties.getProperty(property))
+        ?.takeIf { it.isNotBlank() }
+
+val releaseStoreFile = signingValue("storeFile", "CRUNCH_KEYSTORE_FILE")
+val releaseStorePassword = signingValue("storePassword", "CRUNCH_KEYSTORE_PASSWORD")
+val releaseKeyAlias = signingValue("keyAlias", "CRUNCH_KEY_ALIAS")
+val releaseKeyPassword = signingValue("keyPassword", "CRUNCH_KEY_PASSWORD")
+val hasReleaseSigning = releaseStoreFile != null
 
 android {
     namespace = "com.kappi.crunch"
@@ -12,18 +34,45 @@ android {
         applicationId = "com.kappi.crunch"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.0.2"
 
         ndk {
             abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64"))
         }
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = rootProject.file(releaseStoreFile!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
+    // Per-ABI APKs keep the download small: each bundle of native binaries
+    // (yt-dlp/Python, FFmpeg, aria2c) is only shipped for one architecture.
+    // The universal APK is still built for adb install / sideloading.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+            isUniversalApk = true
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
@@ -116,9 +165,13 @@ dependencies {
   implementation(libs.youtubedl.aria2c)
 }
 
+// Keep KAPT/Room temp files inside the project instead of the system temp
+// directory. Derived from the project location, so the build stays portable.
 val gradleTmpDir = project.rootDir.resolve(".gradle_tmp").absolutePath.replace('\\', '/')
-System.setProperty("java.io.tmpdir", gradleTmpDir)
-System.setProperty("org.sqlite.tmpdir", gradleTmpDir)
+gradleTmpDir.let { tmp ->
+    System.setProperty("java.io.tmpdir", tmp)
+    System.setProperty("org.sqlite.tmpdir", tmp)
+}
 
 tasks.withType<org.jetbrains.kotlin.gradle.internal.KaptWithoutKotlincTask>().configureEach {
     kaptProcessJvmArgs.add("-Djava.io.tmpdir=$gradleTmpDir")
