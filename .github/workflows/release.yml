@@ -35,6 +35,9 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      - name: Prepare temp directory
+        run: mkdir -p .gradle_tmp
+
       - name: Build APKs
         run: ./gradlew assembleRelease --stacktrace
         env:

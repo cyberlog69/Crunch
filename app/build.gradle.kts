@@ -167,15 +167,16 @@ dependencies {
   implementation(libs.youtubedl.aria2c)
 }
 
-// Keep KAPT/Room temp files inside the project instead of the system temp
-// directory. Derived from the project location, so the build stays portable.
-val gradleTmpDir = project.rootDir.resolve(".gradle_tmp").absolutePath.replace('\\', '/')
-gradleTmpDir.let { tmp ->
-    System.setProperty("java.io.tmpdir", tmp)
-    System.setProperty("org.sqlite.tmpdir", tmp)
-}
+// Keep KAPT/Room temp files inside the project on Windows to avoid corporate temp
+// directory execution blocks. On Linux (CI), use the standard system temp directory.
+val isWindows = System.getProperty("os.name")?.lowercase()?.contains("win") == true
+if (isWindows) {
+    val gradleTmpDir = project.rootDir.resolve(".gradle_tmp").apply { mkdirs() }.absolutePath.replace('\\', '/')
+    System.setProperty("java.io.tmpdir", gradleTmpDir)
+    System.setProperty("org.sqlite.tmpdir", gradleTmpDir)
 
-tasks.withType<org.jetbrains.kotlin.gradle.internal.KaptWithoutKotlincTask>().configureEach {
-    kaptProcessJvmArgs.add("-Djava.io.tmpdir=$gradleTmpDir")
-    kaptProcessJvmArgs.add("-Dorg.sqlite.tmpdir=$gradleTmpDir")
+    tasks.withType<org.jetbrains.kotlin.gradle.internal.KaptWithoutKotlincTask>().configureEach {
+        kaptProcessJvmArgs.add("-Djava.io.tmpdir=$gradleTmpDir")
+        kaptProcessJvmArgs.add("-Dorg.sqlite.tmpdir=$gradleTmpDir")
+    }
 }
