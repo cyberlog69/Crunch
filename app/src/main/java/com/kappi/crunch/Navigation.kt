@@ -19,6 +19,8 @@ import com.kappi.crunch.ui.settings.SettingsScreen
 fun MainNavigation(
     sharedUrl: String? = null,
     onSharedUrlConsumed: (() -> Unit)? = null,
+    openUpdateDialog: Boolean = false,
+    onOpenUpdateDialogConsumed: (() -> Unit)? = null,
 ) {
     val backStack = rememberNavBackStack(HomeRoute)
 
@@ -29,6 +31,17 @@ fun MainNavigation(
                 backStack.clear()
                 backStack.add(HomeRoute)
             }
+        }
+    }
+
+    // Automatically navigate to Settings when openUpdateDialog is requested
+    LaunchedEffect(openUpdateDialog) {
+        if (openUpdateDialog) {
+            if (backStack.lastOrNull() !is SettingsRoute) {
+                backStack.clear()
+                backStack.add(SettingsRoute)
+            }
+            onOpenUpdateDialogConsumed?.invoke()
         }
     }
 

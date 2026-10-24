@@ -11,8 +11,9 @@ import kotlinx.coroutines.withContext
 private const val TAG = "UpdateWorker"
 
 /**
- * Background worker that automatically checks and applies over-the-air updates
- * for the yt-dlp download engine when network conditions match user preferences.
+ * Background worker that automatically checks and applies:
+ * 1. Over-the-air updates for the yt-dlp download engine
+ * 2. New Crunch app releases published on GitHub
  */
 class UpdateWorker(
     appContext: Context,
@@ -21,27 +22,42 @@ class UpdateWorker(
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val prefs = UserPreferences(applicationContext)
-        if (!prefs.autoUpdateEngine) {
-            Log.d(TAG, "Skipping engine update: autoUpdateEngine is disabled")
-            return@withContext Result.success()
+
+        // 1. Engine check (yt-dlp)
+        if (prefs.autoUpdateEngine) {
+            val timeSinceLastCheck = System.currentTimeMillis() - prefs.lastUpdateCheck
+            if (timeSinceLastCheck >= 12 * 60 * 60 * 1000L) {
+                Log.i(TAG, "Starting periodic yt-dlp engine update check...")
+                try {
+                    val manager = UpdateManager(applicationContext)
+                    val result = manager.checkAndUpdateEngine(manual = false)
+                    Log.i(TAG, "Engine update check finished: isSuccess=${result.isSuccess}, isUpdated=${result.isUpdated}")
+                } catch (t: Throwable) {
+                    Log.w(TAG, "Engine update check failed", t)
+                }
+            }
         }
 
-        // Avoid checking more than once every 12 hours
-        val timeSinceLastCheck = System.currentTimeMillis() - prefs.lastUpdateCheck
-        if (timeSinceLastCheck < 12 * 60 * 60 * 1000L) {
-            Log.d(TAG, "Skipping engine update: checked recently ($timeSinceLastCheck ms ago)")
-            return@withContext Result.success()
+        // 2. App check (GitHub Releases)
+        if (prefs.autoCheckAppUpdates) {
+            val timeSinceLastAppCheck = System.currentTimeMillis() - prefs.lastAppUpdateCheck
+            if (timeSinceLastAppCheck >= 12 * 60 * 60 * 1000L) {
+                Log.i(TAG, "Starting periodic Crunch app update check from GitHub...")
+                try {
+                    val appUpdateManager = AppUpdateManager(applicationContext)
+                    val result = appUpdateManager.checkForAppUpdate()
+                    if (result is AppUpdateCheckResult.UpdateAvailable) {
+                        if (result.updateInfo.versionName != prefs.ignoredAppUpdateVersion) {
+                            Log.i(TAG, "New app release found in background: ${result.updateInfo.versionTag}")
+                            appUpdateManager.showAppUpdateNotification(result.updateInfo)
+                        }
+                    }
+                } catch (t: Throwable) {
+                    Log.w(TAG, "App release check failed", t)
+                }
+            }
         }
 
-        Log.i(TAG, "Starting periodic yt-dlp engine update check...")
-        val manager = UpdateManager(applicationContext)
-        val result = manager.checkAndUpdateEngine(manual = false)
-        Log.i(TAG, "Engine update check finished: isSuccess=${result.isSuccess}, isUpdated=${result.isUpdated}, msg=${result.message}")
-
-        if (result.isSuccess) {
-            Result.success()
-        } else {
-            Result.retry()
-        }
+        Result.success()
     }
 }

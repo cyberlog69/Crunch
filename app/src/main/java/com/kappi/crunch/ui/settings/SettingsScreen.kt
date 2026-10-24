@@ -21,6 +21,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kappi.crunch.R
 import com.kappi.crunch.data.CommandTemplate
+import com.kappi.crunch.updater.AppUpdateInfo
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -279,8 +281,74 @@ fun SettingsScreen(
 
         Spacer(Modifier.height(16.dp))
 
-        // ── Engine & Updates ──────────────────────────────────────────
-        SettingsSection(title = "Engine & Updates") {
+        // ── Updates & Components ──────────────────────────────────────
+        SettingsSection(title = "Updates & Components") {
+            // Crunch App item
+            val appUpdate = state.availableAppUpdate
+            ListItem(
+                headlineContent = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Crunch Application", style = MaterialTheme.typography.bodyLarge)
+                        Spacer(Modifier.width(8.dp))
+                        if (appUpdate != null) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.primary,
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    "${appUpdate.versionTag} Available",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        } else {
+                            Surface(
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    "GitHub Releases",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+                },
+                supportingContent = {
+                    Text(
+                        if (appUpdate != null)
+                            "Version ${appUpdate.versionTag} ready • ${appUpdate.formattedSize} • Tap Update"
+                        else
+                            "v${state.appVersion} • Installed release",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                leadingContent = {
+                    Icon(
+                        if (appUpdate != null) Icons.Outlined.NewReleases else Icons.Outlined.AppShortcut,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                },
+                trailingContent = {
+                    if (appUpdate != null) {
+                        FilledTonalButton(
+                            onClick = { viewModel.showAppUpdateDialog(true) },
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text("Update", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            )
+            HorizontalDivider(Modifier.padding(start = 56.dp))
+
             // yt-dlp item
             ListItem(
                 headlineContent = {
@@ -395,7 +463,17 @@ fun SettingsScreen(
             )
             HorizontalDivider(Modifier.padding(start = 56.dp))
 
-            // Auto-update toggle
+            // Auto-check app updates toggle
+            SwitchSettingsItem(
+                title = "Automatic app updates",
+                subtitle = "Notify when a new Crunch APK is released on GitHub",
+                icon = Icons.Outlined.SystemUpdate,
+                checked = state.autoCheckAppUpdates,
+                onCheckedChange = viewModel::setAutoCheckAppUpdates,
+            )
+            HorizontalDivider(Modifier.padding(start = 56.dp))
+
+            // Auto-update engine toggle
             SwitchSettingsItem(
                 title = "Automatic engine updates",
                 subtitle = "Silently keep yt-dlp updated in background to prevent extraction breakages",
@@ -404,11 +482,11 @@ fun SettingsScreen(
                 onCheckedChange = viewModel::setAutoUpdateEngine,
             )
 
-            if (state.autoUpdateEngine) {
+            if (state.autoUpdateEngine || state.autoCheckAppUpdates) {
                 HorizontalDivider(Modifier.padding(start = 56.dp))
                 SwitchSettingsItem(
                     title = "Update on Wi-Fi only",
-                    subtitle = "Conserve cellular mobile data for component downloads",
+                    subtitle = "Conserve cellular mobile data for component and APK downloads",
                     icon = Icons.Outlined.Wifi,
                     checked = state.updateWifiOnly,
                     onCheckedChange = viewModel::setUpdateWifiOnly,
@@ -478,19 +556,20 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                val isChecking = state.isCheckingUpdate || state.isCheckingAppUpdate
                 FilledTonalButton(
                     onClick = { viewModel.checkForUpdates() },
-                    enabled = !state.isCheckingUpdate,
+                    enabled = !isChecking,
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    if (state.isCheckingUpdate) {
+                    if (isChecking) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(16.dp),
                             strokeWidth = 2.dp,
                             color = MaterialTheme.colorScheme.primary
                         )
                         Spacer(Modifier.width(8.dp))
-                        Text("Updating…")
+                        Text("Checking…")
                     } else {
                         Icon(
                             Icons.Outlined.SystemUpdate,
@@ -554,6 +633,52 @@ fun SettingsScreen(
         }
 
         Spacer(Modifier.height(48.dp))
+    }
+
+    // App Update Dialog
+    val dialogUpdate = state.availableAppUpdate
+    if (state.showAppUpdateDialog && dialogUpdate != null) {
+        AppUpdateDialog(
+            updateInfo = dialogUpdate,
+            isDownloading = state.isDownloadingAppUpdate,
+            progress = state.appUpdateDownloadProgress,
+            downloadedBytes = state.appUpdateDownloadBytes,
+            totalBytes = state.appUpdateDownloadTotalBytes,
+            downloadedFile = state.downloadedApkFile,
+            onDismiss = { viewModel.showAppUpdateDialog(false) },
+            onUpdate = { viewModel.downloadAndInstallAppUpdate() }
+        )
+    }
+
+    // Permission Dialog
+    if (state.showPermissionDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissPermissionDialog() },
+            icon = {
+                Icon(
+                    Icons.Outlined.Security,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp)
+                )
+            },
+            title = { Text("Permission Required") },
+            text = {
+                Text(
+                    "Android requires permission to install updates downloaded outside an app store.\n\nPlease enable 'Allow from this source' for Crunch on the settings screen, then return here to complete the installation."
+                )
+            },
+            confirmButton = {
+                Button(onClick = { viewModel.openInstallPermissionSettings() }) {
+                    Text("Open Settings")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissPermissionDialog() }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     // Add template bottom sheet
@@ -682,3 +807,180 @@ private fun AddTemplateSheet(
         }
     }
 }
+
+@Composable
+private fun AppUpdateDialog(
+    updateInfo: AppUpdateInfo,
+    isDownloading: Boolean,
+    progress: Float,
+    downloadedBytes: Long,
+    totalBytes: Long,
+    downloadedFile: File?,
+    onDismiss: () -> Unit,
+    onUpdate: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = {
+            if (!isDownloading) onDismiss()
+        },
+        icon = {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Outlined.Upgrade,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+        },
+        title = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    "Update Available",
+                    style = MaterialTheme.typography.titleLarge
+                )
+                Text(
+                    "${updateInfo.versionTag} • ${updateInfo.formattedSize}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+            ) {
+                Text(
+                    "What's New:",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(Modifier.height(8.dp))
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 200.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
+                            .padding(12.dp)
+                    ) {
+                        Text(
+                            text = updateInfo.releaseNotes,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                if (isDownloading) {
+                    Spacer(Modifier.height(16.dp))
+                    if (progress >= 0f) {
+                        LinearProgressIndicator(
+                            progress = { progress },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                        )
+                    } else {
+                        LinearProgressIndicator(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                        )
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    val progressPercent = if (progress >= 0f) "${(progress * 100).toInt()}%" else "Downloading…"
+                    val mbText = if (totalBytes > 0) {
+                        val mbDownloaded = downloadedBytes.toDouble() / (1024.0 * 1024.0)
+                        val mbTotal = totalBytes.toDouble() / (1024.0 * 1024.0)
+                        String.format(java.util.Locale.US, "%.1f / %.1f MB", mbDownloaded, mbTotal)
+                    } else {
+                        val mbDownloaded = downloadedBytes.toDouble() / (1024.0 * 1024.0)
+                        String.format(java.util.Locale.US, "%.1f MB", mbDownloaded)
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = progressPercent,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = mbText,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else if (downloadedFile != null && downloadedFile.exists()) {
+                    Spacer(Modifier.height(14.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 4.dp)
+                    ) {
+                        Icon(
+                            Icons.Filled.CheckCircle,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "Package downloaded. Ready to install.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onUpdate,
+                enabled = !isDownloading
+            ) {
+                if (isDownloading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Downloading…")
+                } else if (downloadedFile != null && downloadedFile.exists()) {
+                    Icon(Icons.Filled.SystemUpdate, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Install Now")
+                } else {
+                    Icon(Icons.Filled.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Download & Install")
+                }
+            }
+        },
+        dismissButton = {
+            if (!isDownloading) {
+                TextButton(onClick = onDismiss) {
+                    Text("Later")
+                }
+            }
+        }
+    )
+}
+

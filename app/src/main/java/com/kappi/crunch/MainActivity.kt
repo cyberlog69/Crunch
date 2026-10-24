@@ -21,6 +21,7 @@ import com.kappi.crunch.theme.CrunchTheme
 class MainActivity : ComponentActivity() {
 
     private var sharedUrlState by mutableStateOf<String?>(null)
+    private var openUpdateDialogState by mutableStateOf(false)
     private val urlRegex = Regex("""https?://[^\s<>"]+""")
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -53,12 +54,19 @@ class MainActivity : ComponentActivity() {
         // Handle shared URL from other apps (e.g. YouTube, Facebook, browsers)
         sharedUrlState = extractSharedUrl(intent)
 
+        // Handle open update dialog from update notification
+        openUpdateDialogState = intent?.getBooleanExtra(
+            com.kappi.crunch.updater.AppUpdateManager.EXTRA_OPEN_UPDATE_DIALOG, false
+        ) == true
+
         setContent {
             CrunchTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     MainNavigation(
                         sharedUrl = sharedUrlState,
-                        onSharedUrlConsumed = { sharedUrlState = null }
+                        onSharedUrlConsumed = { sharedUrlState = null },
+                        openUpdateDialog = openUpdateDialogState,
+                        onOpenUpdateDialogConsumed = { openUpdateDialogState = false }
                     )
                 }
             }
@@ -71,6 +79,9 @@ class MainActivity : ComponentActivity() {
         val url = extractSharedUrl(intent)
         if (!url.isNullOrBlank()) {
             sharedUrlState = url
+        }
+        if (intent.getBooleanExtra(com.kappi.crunch.updater.AppUpdateManager.EXTRA_OPEN_UPDATE_DIALOG, false)) {
+            openUpdateDialogState = true
         }
     }
 

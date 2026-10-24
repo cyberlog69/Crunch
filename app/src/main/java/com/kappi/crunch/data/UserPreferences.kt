@@ -52,6 +52,18 @@ class UserPreferences(context: Context) {
         get() = prefs.getLong(KEY_LAST_UPDATE_CHECK, 0L)
         set(v) = prefs.edit { putLong(KEY_LAST_UPDATE_CHECK, v) }
 
+    var autoCheckAppUpdates: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_CHECK_APP_UPDATES, true)
+        set(v) = prefs.edit { putBoolean(KEY_AUTO_CHECK_APP_UPDATES, v) }
+
+    var lastAppUpdateCheck: Long
+        get() = prefs.getLong(KEY_LAST_APP_UPDATE_CHECK, 0L)
+        set(v) = prefs.edit { putLong(KEY_LAST_APP_UPDATE_CHECK, v) }
+
+    var ignoredAppUpdateVersion: String
+        get() = prefs.getString(KEY_IGNORED_APP_UPDATE_VERSION, "") ?: ""
+        set(v) = prefs.edit { putString(KEY_IGNORED_APP_UPDATE_VERSION, v) }
+
     var commandTemplates: List<CommandTemplate>
         get() {
             val json = prefs.getString(KEY_TEMPLATES, "[]") ?: "[]"
@@ -70,6 +82,9 @@ class UserPreferences(context: Context) {
         private const val KEY_AUTO_UPDATE_ENGINE = "auto_update_engine"
         private const val KEY_UPDATE_WIFI_ONLY = "update_wifi_only"
         private const val KEY_LAST_UPDATE_CHECK = "last_update_check"
+        private const val KEY_AUTO_CHECK_APP_UPDATES = "auto_check_app_updates"
+        private const val KEY_LAST_APP_UPDATE_CHECK = "last_app_update_check"
+        private const val KEY_IGNORED_APP_UPDATE_VERSION = "ignored_app_update_version"
         private const val KEY_TEMPLATES = "command_templates"
     }
 }

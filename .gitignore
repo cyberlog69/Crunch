@@ -21,3 +21,4 @@ build_output.txt
 keystore.properties
 *.jks
 *.keystore
+phone_*.png

@@ -1,0 +1,63 @@
+name: Build and Release Crunch APKs
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag (e.g. v1.0.3)'
+        required: true
+        default: 'v1.0.3'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build APKs
+        run: ./gradlew assembleRelease --stacktrace
+        env:
+          CRUNCH_KEYSTORE_FILE: ${{ secrets.CRUNCH_KEYSTORE_FILE }}
+          CRUNCH_KEYSTORE_PASSWORD: ${{ secrets.CRUNCH_KEYSTORE_PASSWORD }}
+          CRUNCH_KEY_ALIAS: ${{ secrets.CRUNCH_KEY_ALIAS }}
+          CRUNCH_KEY_PASSWORD: ${{ secrets.CRUNCH_KEY_PASSWORD }}
+
+      - name: Collect Release APKs
+        run: |
+          mkdir -p release_assets
+          # If signed release APKs exist, collect them; otherwise collect unsigned or universal
+          find app/build/outputs/apk/release/ -name "*.apk" -exec cp {} release_assets/ \;
+          ls -la release_assets/
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name || inputs.tag_name }}
+          name: Crunch ${{ github.ref_name || inputs.tag_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: release_assets/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

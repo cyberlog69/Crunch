@@ -46,6 +46,9 @@ class CrunchApp : Application() {
                 val updateManager = com.kappi.crunch.updater.UpdateManager(this@CrunchApp)
                 updateManager.createNotificationChannel()
                 updateManager.schedulePeriodicAutoUpdate()
+
+                val appUpdateManager = com.kappi.crunch.updater.AppUpdateManager(this@CrunchApp)
+                appUpdateManager.createNotificationChannel()
             } catch (t: Throwable) {
                 Log.e(TAG, "Failed to configure UpdateManager", t)
             }

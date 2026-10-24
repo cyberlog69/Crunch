@@ -5,4 +5,7 @@
     <!-- Public Downloads/Crunch files on legacy (API 26-28) storage -->
     <external-path name="public_downloads" path="Download/Crunch/" />
     <files-path name="internal" path="." />
+    <!-- Cache directories for downloaded APK updates -->
+    <cache-path name="cache_updates" path="updates/" />
+    <external-cache-path name="ext_cache_updates" path="updates/" />
 </paths>

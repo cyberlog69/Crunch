@@ -10,9 +10,11 @@ A modern, high-performance media and video stream downloader for Android, built 
   - Multi-connection segmented downloading via native **aria2c** (4x, 8x, 16x, 32x parallel socket threads).
   - Concurrent DASH and HLS segment/fragment splitting for live streams and segmented video downloads.
 - **🔄 In-App Automatic Updater**:
-  - Over-the-air (OTA) dynamic updating for the **yt-dlp** engine.
-  - Background periodic update checks via **WorkManager** (with Wi-Fi-only preservation).
-  - Manual "Check for Updates" in Settings with real-time feedback.
+  - **GitHub Releases Self-Updater**: Automatically checks for new Crunch APK releases on GitHub, displays release notes/changelog, downloads with a live progress indicator, and launches the system installer.
+  - **Automated CI/CD**: Pushing any `v*` git tag automatically triggers GitHub Actions to build and publish the release APKs.
+  - **Over-The-Air Engine Updates**: Dynamic OTA updating for the native **yt-dlp** extraction engine.
+  - **Background Periodic Worker**: Periodic checks via **WorkManager** (with Wi-Fi-only preservation).
+  - **Manual Check for Updates**: Instant one-tap check in Settings that queries both GitHub and the download engine simultaneously.
 - **🎬 Remux & MKV Optimization**:
   - Automatic remuxing and container conversion into `.mkv` (or `.mp4`) after downloading for maximum compatibility and subtitle preservation.
 - **📂 Public Downloads Folder**:
@@ -96,5 +98,27 @@ Without signing material the release APKs are still produced, but unsigned.
 
 ---
 
+## 🚀 Publishing Future Releases on GitHub
+
+Crunch includes an automated GitHub Actions release workflow. To publish a new release:
+
+1. Bump `versionCode` and `versionName` in `app/build.gradle.kts` (e.g. `versionName = "1.0.3"`).
+2. Commit and push your changes to GitHub:
+   ```bash
+   git add .
+   git commit -m "Release v1.0.3"
+   git push origin main
+   ```
+3. Tag the release and push the tag:
+   ```bash
+   git tag v1.0.3
+   git push origin v1.0.3
+   ```
+4. GitHub Actions will automatically build the release APKs and publish the GitHub Release with all APK assets attached!
+5. Existing Crunch app installations will automatically detect the new release and prompt the user to update!
+
+---
+
 ## 📄 License
 This project is licensed under the Apache 2.0 License.
+
