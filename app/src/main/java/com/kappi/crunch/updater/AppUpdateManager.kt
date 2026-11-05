@@ -7,10 +7,8 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
-import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import androidx.core.content.FileProvider
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.kappi.crunch.BuildConfig
@@ -19,10 +17,7 @@ import com.kappi.crunch.R
 import com.kappi.crunch.data.UserPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
-import java.io.FileOutputStream
 import java.io.IOException
-import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.text.DecimalFormat
@@ -210,191 +205,22 @@ class AppUpdateManager(private val context: Context) {
     }
 
     /**
-     * Downloads the APK file to app cache with real-time progress callbacks.
+     * Opens the browser to download the release APK directly.
+     *
+     * Routing the download through the browser eliminates the need for
+     * `android.permission.REQUEST_INSTALL_PACKAGES` in Crunch's manifest, which prevents
+     * Google Play Protect from misidentifying Crunch as an unauthorized "Trojan-Dropper".
      */
-    suspend fun downloadApk(
-        asset: GitHubAsset,
-        onProgress: (AppDownloadProgress) -> Unit
-    ): File = withContext(Dispatchers.IO) {
-        val updatesDir = File(context.externalCacheDir ?: context.cacheDir, "updates").apply {
-            mkdirs()
-        }
-
-        // Clean any old APK files in updates dir
-        updatesDir.listFiles()?.forEach { file ->
-            if (file.extension.equals("apk", ignoreCase = true)) {
-                file.delete()
-            }
-        }
-
-        val targetFile = File(updatesDir, asset.name.ifBlank { "crunch_update.apk" })
-        Log.i(TAG, "Downloading update APK from ${asset.downloadUrl} to ${targetFile.absolutePath}")
-
-        var currentUrl = asset.downloadUrl
-        var redirects = 0
-        var conn: HttpURLConnection? = null
-        var inputStream: InputStream? = null
-        var outputStream: FileOutputStream? = null
-
-        try {
-            while (redirects < 6) {
-                conn = (URL(currentUrl).openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 20_000
-                    readTimeout = 60_000
-                    instanceFollowRedirects = true
-                    setRequestProperty("User-Agent", "Crunch-Android/${BuildConfig.VERSION_NAME}")
-                    setRequestProperty("Accept", "application/octet-stream")
-                }
-
-                val status = conn.responseCode
-                if (status in 300..399) {
-                    val location = conn.getHeaderField("Location")
-                        ?: throw IOException("HTTP redirect $status without Location header")
-                    conn.disconnect()
-                    currentUrl = location
-                    redirects++
-                    continue
-                }
-
-                if (status !in 200..299) {
-                    conn.disconnect()
-                    throw IOException("HTTP error $status: ${conn.responseMessage}")
-                }
-
-                break
-            }
-
-            val totalBytes = if (asset.size > 0) asset.size else (conn?.contentLengthLong ?: -1L)
-            inputStream = conn?.inputStream ?: throw IOException("Failed to obtain input stream")
-            outputStream = FileOutputStream(targetFile)
-
-            val buffer = ByteArray(8192)
-            var bytesRead: Int
-            var totalDownloaded = 0L
-            var lastReportTime = 0L
-
-            onProgress(
-                AppDownloadProgress(
-                    progress = 0f,
-                    bytesDownloaded = 0L,
-                    totalBytes = totalBytes,
-                    isDone = false
-                )
-            )
-
-            while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                outputStream.write(buffer, 0, bytesRead)
-                totalDownloaded += bytesRead
-
-                val now = System.currentTimeMillis()
-                if (now - lastReportTime > 100 || totalDownloaded == totalBytes) {
-                    lastReportTime = now
-                    val progressFloat = if (totalBytes > 0) {
-                        (totalDownloaded.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f)
-                    } else {
-                        -1f
-                    }
-                    onProgress(
-                        AppDownloadProgress(
-                            progress = progressFloat,
-                            bytesDownloaded = totalDownloaded,
-                            totalBytes = totalBytes,
-                            isDone = false
-                        )
-                    )
-                }
-            }
-
-            outputStream.flush()
-            Log.i(TAG, "Download finished successfully: ${targetFile.length()} bytes written")
-
-            // Validate APK integrity
-            val pm = context.packageManager
-            val pkgInfo = pm.getPackageArchiveInfo(targetFile.absolutePath, 0)
-            if (pkgInfo == null) {
-                targetFile.delete()
-                throw IOException("Downloaded package is corrupt or not a valid Android APK")
-            }
-
-            onProgress(
-                AppDownloadProgress(
-                    progress = 1f,
-                    bytesDownloaded = targetFile.length(),
-                    totalBytes = targetFile.length(),
-                    isDone = true
-                )
-            )
-
-            targetFile
-        } catch (e: Exception) {
-            targetFile.delete()
-            throw e
-        } finally {
-            try { outputStream?.close() } catch (_: Exception) {}
-            try { inputStream?.close() } catch (_: Exception) {}
-            try { conn?.disconnect() } catch (_: Exception) {}
-        }
-    }
-
-    /**
-     * Checks whether unknown app source installation is allowed.
-     */
-    fun canInstallPackages(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.packageManager.canRequestPackageInstalls()
-        } else {
-            true
-        }
-    }
-
-    /**
-     * Opens system Settings so user can toggle "Allow from this source".
-     */
-    fun openInstallPermissionSettings() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
-                data = Uri.parse("package:${context.packageName}")
+    fun openDownloadUrl(url: String): Boolean {
+        return try {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
-        }
-    }
-
-    /**
-     * Launches the system Android package installer to install the downloaded APK.
-     */
-    fun installApk(apkFile: File): InstallResult {
-        if (!apkFile.exists() || apkFile.length() == 0L) {
-            return InstallResult.Error("Update file not found or empty.")
-        }
-
-        if (!canInstallPackages()) {
-            return InstallResult.PermissionRequired
-        }
-
-        val apkUri: Uri = try {
-            FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.provider",
-                apkFile
-            )
+            true
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to create FileProvider URI for update APK", e)
-            return InstallResult.Error("Failed to share update file: ${e.message}")
-        }
-
-        val installIntent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(apkUri, "application/vnd.android.package-archive")
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-
-        return try {
-            context.startActivity(installIntent)
-            InstallResult.Success
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to start install Intent", e)
-            InstallResult.Error("Could not launch package installer: ${e.message}")
+            Log.e(TAG, "Failed to launch browser for download URL: $url", e)
+            false
         }
     }
 

@@ -640,44 +640,9 @@ fun SettingsScreen(
     if (state.showAppUpdateDialog && dialogUpdate != null) {
         AppUpdateDialog(
             updateInfo = dialogUpdate,
-            isDownloading = state.isDownloadingAppUpdate,
-            progress = state.appUpdateDownloadProgress,
-            downloadedBytes = state.appUpdateDownloadBytes,
-            totalBytes = state.appUpdateDownloadTotalBytes,
-            downloadedFile = state.downloadedApkFile,
             onDismiss = { viewModel.showAppUpdateDialog(false) },
-            onUpdate = { viewModel.downloadAndInstallAppUpdate() }
-        )
-    }
-
-    // Permission Dialog
-    if (state.showPermissionDialog) {
-        AlertDialog(
-            onDismissRequest = { viewModel.dismissPermissionDialog() },
-            icon = {
-                Icon(
-                    Icons.Outlined.Security,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(28.dp)
-                )
-            },
-            title = { Text("Permission Required") },
-            text = {
-                Text(
-                    "Android requires permission to install updates downloaded outside an app store.\n\nPlease enable 'Allow from this source' for Crunch on the settings screen, then return here to complete the installation."
-                )
-            },
-            confirmButton = {
-                Button(onClick = { viewModel.openInstallPermissionSettings() }) {
-                    Text("Open Settings")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.dismissPermissionDialog() }) {
-                    Text("Cancel")
-                }
-            }
+            onDownload = { viewModel.openAppUpdateDownload() },
+            onViewRelease = { viewModel.openAppUpdateReleasePage() }
         )
     }
 
@@ -811,18 +776,12 @@ private fun AddTemplateSheet(
 @Composable
 private fun AppUpdateDialog(
     updateInfo: AppUpdateInfo,
-    isDownloading: Boolean,
-    progress: Float,
-    downloadedBytes: Long,
-    totalBytes: Long,
-    downloadedFile: File?,
     onDismiss: () -> Unit,
-    onUpdate: () -> Unit,
+    onDownload: () -> Unit,
+    onViewRelease: () -> Unit,
 ) {
     AlertDialog(
-        onDismissRequest = {
-            if (!isDownloading) onDismiss()
-        },
+        onDismissRequest = onDismiss,
         icon = {
             Box(
                 modifier = Modifier
@@ -869,7 +828,7 @@ private fun AppUpdateDialog(
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 200.dp)
+                        .heightIn(max = 220.dp)
                 ) {
                     Column(
                         modifier = Modifier
@@ -878,104 +837,32 @@ private fun AppUpdateDialog(
                             .padding(12.dp)
                     ) {
                         Text(
-                            text = updateInfo.releaseNotes,
+                            text = updateInfo.releaseNotes.ifBlank { "Release notes available on GitHub." },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-
-                if (isDownloading) {
-                    Spacer(Modifier.height(16.dp))
-                    if (progress >= 0f) {
-                        LinearProgressIndicator(
-                            progress = { progress },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(8.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                        )
-                    } else {
-                        LinearProgressIndicator(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(8.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                        )
-                    }
-                    Spacer(Modifier.height(6.dp))
-                    val progressPercent = if (progress >= 0f) "${(progress * 100).toInt()}%" else "Downloading…"
-                    val mbText = if (totalBytes > 0) {
-                        val mbDownloaded = downloadedBytes.toDouble() / (1024.0 * 1024.0)
-                        val mbTotal = totalBytes.toDouble() / (1024.0 * 1024.0)
-                        String.format(java.util.Locale.US, "%.1f / %.1f MB", mbDownloaded, mbTotal)
-                    } else {
-                        val mbDownloaded = downloadedBytes.toDouble() / (1024.0 * 1024.0)
-                        String.format(java.util.Locale.US, "%.1f MB", mbDownloaded)
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = progressPercent,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            text = mbText,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                } else if (downloadedFile != null && downloadedFile.exists()) {
-                    Spacer(Modifier.height(14.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 4.dp)
-                    ) {
-                        Icon(
-                            Icons.Filled.CheckCircle,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            "Package downloaded. Ready to install.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Download the update safely via your browser to avoid Play Protect false-positive warnings.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                )
             }
         },
         confirmButton = {
-            Button(
-                onClick = onUpdate,
-                enabled = !isDownloading
-            ) {
-                if (isDownloading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text("Downloading…")
-                } else if (downloadedFile != null && downloadedFile.exists()) {
-                    Icon(Icons.Filled.SystemUpdate, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Install Now")
-                } else {
-                    Icon(Icons.Filled.Download, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Download & Install")
-                }
+            Button(onClick = onDownload) {
+                Icon(Icons.Filled.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Download APK")
             }
         },
         dismissButton = {
-            if (!isDownloading) {
+            Row {
+                TextButton(onClick = onViewRelease) {
+                    Text("View on GitHub")
+                }
                 TextButton(onClick = onDismiss) {
                     Text("Later")
                 }

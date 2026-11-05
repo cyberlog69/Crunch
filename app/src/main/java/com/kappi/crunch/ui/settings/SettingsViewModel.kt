@@ -40,13 +40,7 @@ data class SettingsState(
     val autoCheckAppUpdates: Boolean = true,
     val availableAppUpdate: AppUpdateInfo? = null,
     val isCheckingAppUpdate: Boolean = false,
-    val isDownloadingAppUpdate: Boolean = false,
-    val appUpdateDownloadProgress: Float = 0f,
-    val appUpdateDownloadBytes: Long = 0L,
-    val appUpdateDownloadTotalBytes: Long = 0L,
-    val downloadedApkFile: File? = null,
     val showAppUpdateDialog: Boolean = false,
-    val showPermissionDialog: Boolean = false,
     val appUpdateStatusMessage: String? = null,
     val isAppUpdateSuccess: Boolean? = null,
 )
@@ -259,94 +253,22 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     /**
-     * Starts downloading the APK for the available update.
+     * Launches the system default browser to download the release APK directly.
      */
-    fun downloadAndInstallAppUpdate() {
-        val updateInfo = _state.value.availableAppUpdate ?: return
-        if (_state.value.isDownloadingAppUpdate) return
-
-        // If already downloaded and valid, jump straight to install
-        val existingFile = _state.value.downloadedApkFile
-        if (existingFile != null && existingFile.exists() && existingFile.length() > 0) {
-            installDownloadedApk()
-            return
-        }
-
-        viewModelScope.launch {
-            _state.update {
-                it.copy(
-                    isDownloadingAppUpdate = true,
-                    appUpdateDownloadProgress = 0f,
-                    appUpdateDownloadBytes = 0L,
-                    appUpdateDownloadTotalBytes = updateInfo.apkAsset.size,
-                    appUpdateStatusMessage = "Downloading ${updateInfo.versionTag}…",
-                )
-            }
-
-            try {
-                val apkFile = appUpdateManager.downloadApk(updateInfo.apkAsset) { progress ->
-                    _state.update {
-                        it.copy(
-                            appUpdateDownloadProgress = progress.progress,
-                            appUpdateDownloadBytes = progress.bytesDownloaded,
-                            appUpdateDownloadTotalBytes = progress.totalBytes,
-                        )
-                    }
-                }
-
-                _state.update {
-                    it.copy(
-                        isDownloadingAppUpdate = false,
-                        downloadedApkFile = apkFile,
-                        appUpdateDownloadProgress = 1f,
-                        appUpdateStatusMessage = "Download complete. Ready to install.",
-                    )
-                }
-
-                // Automatically attempt install
-                installDownloadedApk()
-            } catch (e: Exception) {
-                _state.update {
-                    it.copy(
-                        isDownloadingAppUpdate = false,
-                        appUpdateStatusMessage = "Download failed: ${e.message}",
-                        isAppUpdateSuccess = false,
-                    )
-                }
-            }
-        }
+    fun openAppUpdateDownload() {
+        val update = _state.value.availableAppUpdate ?: return
+        val url = update.apkAsset.downloadUrl.ifBlank { update.releaseUrl }
+        appUpdateManager.openDownloadUrl(url)
+        _state.update { it.copy(showAppUpdateDialog = false) }
     }
 
     /**
-     * Launches the Android package installer for the downloaded APK.
+     * Launches the system default browser to view the GitHub release page and changelog.
      */
-    fun installDownloadedApk() {
-        val file = _state.value.downloadedApkFile ?: return
-        when (val result = appUpdateManager.installApk(file)) {
-            is InstallResult.Success -> {
-                _state.update { it.copy(showAppUpdateDialog = false) }
-            }
-            is InstallResult.PermissionRequired -> {
-                _state.update { it.copy(showPermissionDialog = true) }
-            }
-            is InstallResult.Error -> {
-                _state.update {
-                    it.copy(
-                        appUpdateStatusMessage = result.message,
-                        isAppUpdateSuccess = false
-                    )
-                }
-            }
-        }
-    }
-
-    fun openInstallPermissionSettings() {
-        appUpdateManager.openInstallPermissionSettings()
-        _state.update { it.copy(showPermissionDialog = false) }
-    }
-
-    fun dismissPermissionDialog() {
-        _state.update { it.copy(showPermissionDialog = false) }
+    fun openAppUpdateReleasePage() {
+        val update = _state.value.availableAppUpdate ?: return
+        appUpdateManager.openDownloadUrl(update.releaseUrl)
+        _state.update { it.copy(showAppUpdateDialog = false) }
     }
 
     fun showAppUpdateDialog(show: Boolean) {
