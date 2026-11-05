@@ -46,4 +46,20 @@ class FormatUtilsTest {
         )
         assertEquals(emptyList<String>(), FormatUtils.splitArgs("   "))
     }
+
+    @Test
+    fun conciseError_cleansErrorPrefixAndTraceback() {
+        assertEquals("Unknown error", FormatUtils.conciseError(null))
+        assertEquals("Unknown error", FormatUtils.conciseError(""))
+        assertEquals(
+            "unable to open for writing: [Errno 36] File name too long",
+            FormatUtils.conciseError("ERROR: unable to open for writing: [Errno 36] File name too long")
+        )
+        val tb = """
+            Traceback (most recent call last):
+              File "yt_dlp/downloader/common.py", line 370, in download
+            ERROR: Video unavailable
+        """.trimIndent()
+        assertEquals("Video unavailable", FormatUtils.conciseError(tb))
+    }
 }

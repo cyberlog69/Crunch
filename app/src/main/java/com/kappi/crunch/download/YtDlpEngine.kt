@@ -479,7 +479,12 @@ class YtDlpEngine(private val context: Context) {
         val outDir = File(outputDir).apply { mkdirs() }
         val request = YoutubeDLRequest(url)
 
-        request.addOption("-o", "${outDir.absolutePath}/%(title)s.%(ext)s")
+        // Android filesystems (ext4/f2fs/sdcard) enforce a strict 255-byte limit per filename component.
+        // Cap title to 160 bytes in UTF-8 and trim filenames to prevent Errno 36 (File name too long)
+        // when downloading videos with lengthy descriptions or multi-byte Unicode/emojis as titles.
+        request.addOption("-o", "${outDir.absolutePath}/%(title).160B.%(ext)s")
+        request.addOption("--trim-filenames", "160")
+        request.addOption("--windows-filenames")
 
         if (downloadType == com.kappi.crunch.data.DownloadType.AUDIO) {
             val audioSelector = when {

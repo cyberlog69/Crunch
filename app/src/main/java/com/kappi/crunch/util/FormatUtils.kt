@@ -24,16 +24,16 @@ object FormatUtils {
     fun conciseError(message: String?): String {
         val raw = message?.trim().orEmpty()
         if (raw.isEmpty()) return "Unknown error"
-        val result = if (!raw.contains("Traceback (most recent call last)")) {
+        val line = if (!raw.contains("Traceback (most recent call last)")) {
             raw
         } else {
             val lines = raw.lines().map { it.trim() }.filter { it.isNotEmpty() }
-            val last = lines.lastOrNull { it.startsWith("ERROR:") }
+            lines.lastOrNull { it.startsWith("ERROR:") }
                 ?: lines.lastOrNull { EXCEPTION_LINE.containsMatchIn(it) }
                 ?: lines.lastOrNull().orEmpty()
-            last.removePrefix("ERROR:").trim()
         }
-        return result.ifEmpty { "Unknown error" }.take(400)
+        val cleaned = line.removePrefix("ERROR:").trim()
+        return cleaned.ifEmpty { "Unknown error" }.take(400)
     }
 
     private val EXCEPTION_LINE = Regex("""^[\w.]*(Error|Exception|Interrupt|Exit)\b""")
