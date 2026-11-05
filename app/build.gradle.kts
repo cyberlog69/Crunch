@@ -7,9 +7,9 @@ plugins {
   alias(libs.plugins.legacy.kapt)
 }
 
-// Release signing is optional. Values come from keystore.properties (ignored by
-// git) or from CRUNCH_* environment variables, so CI can sign without a file
-// and a fresh clone can still run `assembleRelease` unsigned.
+// Release signing: Uses committed app/crunch-release.jks by default so all
+// local and GitHub Actions builds produce consistent, upgrade-compatible signatures.
+// Can be overridden via keystore.properties or CRUNCH_* environment variables.
 val keystoreProperties = Properties().apply {
     val file = rootProject.file("keystore.properties")
     if (file.exists()) {
@@ -21,11 +21,18 @@ fun signingValue(property: String, environment: String): String? =
     (System.getenv(environment) ?: keystoreProperties.getProperty(property))
         ?.takeIf { it.isNotBlank() }
 
+val defaultKeystore = rootProject.file("app/crunch-release.jks")
+val hasDefaultKeystore = defaultKeystore.exists()
+
 val releaseStoreFile = signingValue("storeFile", "CRUNCH_KEYSTORE_FILE")
+    ?: (if (hasDefaultKeystore) defaultKeystore.absolutePath else null)
 val releaseStorePassword = signingValue("storePassword", "CRUNCH_KEYSTORE_PASSWORD")
+    ?: (if (hasDefaultKeystore) "crunchApp2026!" else null)
 val releaseKeyAlias = signingValue("keyAlias", "CRUNCH_KEY_ALIAS")
+    ?: (if (hasDefaultKeystore) "crunch" else null)
 val releaseKeyPassword = signingValue("keyPassword", "CRUNCH_KEY_PASSWORD")
-val hasReleaseSigning = releaseStoreFile != null
+    ?: (if (hasDefaultKeystore) "crunchApp2026!" else null)
+val hasReleaseSigning = releaseStoreFile != null && releaseStorePassword != null && releaseKeyAlias != null
 
 android {
     namespace = "com.kappi.crunch"
@@ -34,8 +41,8 @@ android {
         applicationId = "com.kappi.crunch"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "1.0.4"
+        versionCode = 6
+        versionName = "1.0.5"
 
         ndk {
             abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64"))
@@ -49,6 +56,8 @@ android {
                 storePassword = releaseStorePassword
                 keyAlias = releaseKeyAlias
                 keyPassword = releaseKeyPassword
+                enableV1Signing = true
+                enableV2Signing = true
             }
         }
     }
@@ -66,6 +75,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true

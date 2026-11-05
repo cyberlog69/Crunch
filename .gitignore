@@ -17,8 +17,9 @@ build_output.txt
 *.apk
 *.aab
 
-# Release signing material — never commit these.
+# Release signing material
 keystore.properties
-*.jks
 *.keystore
+*.jks
+!app/crunch-release.jks
 phone_*.png
