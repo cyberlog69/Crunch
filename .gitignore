@@ -23,3 +23,6 @@ keystore.properties
 *.jks
 !app/crunch-release.jks
 phone_*.png
+
+# Internal planning documents — not for public repository
+ROADMAP.md
