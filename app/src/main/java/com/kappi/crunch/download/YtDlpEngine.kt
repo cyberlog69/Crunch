@@ -84,6 +84,14 @@ class YtDlpEngine(private val context: Context) {
             val lock = engineLock.writeLock()
             lock.lock()
             try {
+                val tmpDir = File(context.cacheDir, "tmp").apply { mkdirs() }
+                System.setProperty("java.io.tmpdir", tmpDir.absolutePath)
+                try {
+                    android.system.Os.setenv("TMPDIR", tmpDir.absolutePath, true)
+                    android.system.Os.setenv("TEMP", tmpDir.absolutePath, true)
+                    android.system.Os.setenv("TMP", tmpDir.absolutePath, true)
+                } catch (_: Throwable) {}
+
                 EngineRepair.run(context.applicationContext)
                 YoutubeDL.getInstance().init(context.applicationContext)
                 initialized = true
@@ -187,6 +195,8 @@ class YtDlpEngine(private val context: Context) {
         }
 
         val likelyPlaylist = isLikelyPlaylist(cleanUrl)
+        val tempDir = File(context.cacheDir, "tmp").apply { mkdirs() }
+        val ytdlpCacheDir = File(context.cacheDir, "ytdlp_cache").apply { mkdirs() }
 
         // 2. Optimized single-pass yt-dlp request (no double execution)
         val request = YoutubeDLRequest(cleanUrl).apply {
@@ -200,6 +210,8 @@ class YtDlpEngine(private val context: Context) {
             addOption("--no-check-certificates")
             addOption("--socket-timeout", "10")
             addOption("--geo-bypass")
+            addOption("--paths", "temp:${tempDir.absolutePath}")
+            addOption("--cache-dir", ytdlpCacheDir.absolutePath)
         }
 
         val response = try {
@@ -477,7 +489,14 @@ class YtDlpEngine(private val context: Context) {
         ensureInitialized()
 
         val outDir = File(outputDir).apply { mkdirs() }
+        val tempDir = File(context.cacheDir, "tmp").apply { mkdirs() }
+        val ytdlpCacheDir = File(context.cacheDir, "ytdlp_cache").apply { mkdirs() }
         val request = YoutubeDLRequest(url)
+
+        // Point yt-dlp temporary files and extractor cache to writable app cache
+        // to prevent [Errno 30] Read-only file system: '/tmp...'
+        request.addOption("--paths", "temp:${tempDir.absolutePath}")
+        request.addOption("--cache-dir", ytdlpCacheDir.absolutePath)
 
         // Android filesystems (ext4/f2fs/sdcard) enforce a strict 255-byte limit per filename component.
         // Cap title to 160 bytes in UTF-8 and trim filenames to prevent Errno 36 (File name too long)

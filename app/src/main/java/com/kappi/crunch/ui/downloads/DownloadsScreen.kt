@@ -43,13 +43,16 @@ fun DownloadsScreen(
     val completed = state.completed
 
     if (active.isEmpty() && completed.isEmpty()) {
-        EmptyState(modifier = modifier.fillMaxSize())
+        EmptyState(
+            onRescan = { viewModel.rescanDownloadsFolder() },
+            modifier = modifier.fillMaxSize()
+        )
         return
     }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 48.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         if (active.isNotEmpty()) {
@@ -405,7 +408,10 @@ private fun DeleteConfirmDialog(
 }
 
 @Composable
-private fun EmptyState(modifier: Modifier = Modifier) {
+private fun EmptyState(
+    onRescan: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -438,6 +444,15 @@ private fun EmptyState(modifier: Modifier = Modifier) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
+            Spacer(Modifier.height(18.dp))
+            OutlinedButton(
+                onClick = onRescan,
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(Icons.Outlined.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Restore Downloads from Storage")
+            }
         }
     }
 }

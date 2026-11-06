@@ -15,6 +15,12 @@ class DownloadsViewModel(application: Application) : AndroidViewModel(applicatio
     private val db = CrunchDatabase.getInstance(application)
     private val dao = db.downloadDao()
 
+    init {
+        viewModelScope.launch(Dispatchers.IO) {
+            DownloadHistorySync.sync(application, dao)
+        }
+    }
+
     /**
      * Both lists come from one query so a status change can never be observed as
      * "in active" and "in completed" at the same time, which would give the
@@ -60,6 +66,12 @@ class DownloadsViewModel(application: Application) : AndroidViewModel(applicatio
             dao.update(reset)
             val updated = DownloadManager.enqueue(getApplication(), reset)
             dao.update(updated)
+        }
+    }
+
+    fun rescanDownloadsFolder() {
+        viewModelScope.launch(Dispatchers.IO) {
+            DownloadHistorySync.sync(getApplication(), dao)
         }
     }
 

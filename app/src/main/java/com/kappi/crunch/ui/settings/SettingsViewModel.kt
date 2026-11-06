@@ -329,4 +329,26 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         prefs.commandTemplates = updated
         _state.update { it.copy(commandTemplates = updated) }
     }
+
+    fun rescanDownloads() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val dao = com.kappi.crunch.data.CrunchDatabase.getInstance(getApplication()).downloadDao()
+            val before = dao.getAllFilePaths().size
+            com.kappi.crunch.data.DownloadHistorySync.sync(getApplication(), dao)
+            val after = dao.getAllFilePaths().size
+            val added = (after - before).coerceAtLeast(0)
+            withContext(Dispatchers.Main) {
+                _state.update {
+                    it.copy(
+                        updateStatusMessage = if (added > 0) "Restored $added downloads to history!" else "Download history is up to date.",
+                        isUpdateSuccess = true
+                    )
+                }
+            }
+        }
+    }
+
+    fun openGitHubRepo() {
+        appUpdateManager.openDownloadUrl("https://github.com/cyberlog69/Crunch")
+    }
 }

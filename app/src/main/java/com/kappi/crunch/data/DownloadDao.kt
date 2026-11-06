@@ -41,4 +41,13 @@ interface DownloadDao {
 
     @Query("SELECT * FROM downloads WHERE playlistId = :playlistId ORDER BY playlistIndex ASC")
     fun observePlaylist(playlistId: String): Flow<List<DownloadItem>>
+
+    @Query("SELECT filePath FROM downloads WHERE filePath IS NOT NULL AND filePath != ''")
+    suspend fun getAllFilePaths(): List<String>
+
+    @Query("SELECT title FROM downloads")
+    suspend fun getAllTitles(): List<String>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertAll(items: List<DownloadItem>)
 }

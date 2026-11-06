@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.AltRoute
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -14,15 +15,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kappi.crunch.R
 import com.kappi.crunch.data.CommandTemplate
 import com.kappi.crunch.updater.AppUpdateInfo
-import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,23 +43,84 @@ fun SettingsScreen(
     ) {
         Spacer(Modifier.height(24.dp))
 
-        Text(
-            text = stringResource(R.string.settings_title),
-            style = MaterialTheme.typography.headlineMedium,
-        )
+        // ── Header ─────────────────────────────────────────────────────
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Text(
+                    text = stringResource(R.string.settings_title),
+                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                Text(
+                    text = "Preferences & Engine Configuration",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    text = "v${state.appVersion}",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                )
+            }
+        }
+
         Spacer(Modifier.height(20.dp))
 
-        // ── Download folder ───────────────────────────────────────────
-        SettingsSection(title = "Storage") {
+        // ── Storage Section ───────────────────────────────────────────
+        SettingsSection(
+            title = "Storage & Downloads",
+            icon = Icons.Outlined.Folder
+        ) {
             ListItem(
-                headlineContent = { Text(stringResource(R.string.settings_output_folder)) },
-                supportingContent = { Text("Downloads/Crunch • visible in the Files app") },
-                leadingContent = {
-                    Icon(
-                        Icons.Outlined.Folder,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                headlineContent = {
+                    Text(
+                        stringResource(R.string.settings_output_folder),
+                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold)
                     )
+                },
+                supportingContent = {
+                    Text(
+                        "Downloads/Crunch • Preserved safely across updates",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                leadingContent = {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Outlined.FolderSpecial,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                },
+                trailingContent = {
+                    FilledTonalButton(
+                        onClick = { viewModel.rescanDownloads() },
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Outlined.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Sync", style = MaterialTheme.typography.labelMedium)
+                    }
                 },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
@@ -66,23 +129,27 @@ fun SettingsScreen(
         Spacer(Modifier.height(16.dp))
 
         // ── Audio defaults ────────────────────────────────────────────
-        SettingsSection(title = "Audio") {
+        SettingsSection(
+            title = "Audio Defaults",
+            icon = Icons.Outlined.AudioFile
+        ) {
             SwitchSettingsItem(
                 title = stringResource(R.string.settings_thumbnail_embed),
-                subtitle = "Add cover art to audio files",
+                subtitle = "Embed album artwork into downloaded audio tracks",
                 icon = Icons.Outlined.Image,
                 checked = state.embedThumbnail,
                 onCheckedChange = viewModel::setEmbedThumbnail,
             )
-            HorizontalDivider(Modifier.padding(start = 56.dp))
+            HorizontalDivider(Modifier.padding(start = 56.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
             SwitchSettingsItem(
                 title = stringResource(R.string.settings_metadata_embed),
-                subtitle = "Embed title, artist, etc.",
+                subtitle = "Embed title, artist, year, and ID3 tags",
                 icon = Icons.Outlined.Tag,
                 checked = state.embedMetadata,
                 onCheckedChange = viewModel::setEmbedMetadata,
             )
-            HorizontalDivider(Modifier.padding(start = 56.dp))
+            HorizontalDivider(Modifier.padding(start = 56.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+
             // Default audio format
             val audioFormats = listOf("mp3", "m4a", "opus", "flac", "wav")
             Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
@@ -90,16 +157,31 @@ fun SettingsScreen(
                     Icon(
                         Icons.Outlined.MusicNote,
                         contentDescription = null,
-                        modifier = Modifier.size(24.dp),
+                        modifier = Modifier.size(22.dp),
                         tint = MaterialTheme.colorScheme.primary,
                     )
                     Spacer(Modifier.width(16.dp))
-                    Text(
-                        stringResource(R.string.settings_default_audio_format),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
+                    Column {
+                        Text(
+                            stringResource(R.string.settings_default_audio_format),
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                        )
+                        val desc = when (state.defaultAudioFormat.lowercase()) {
+                            "opus" -> "OPUS: High fidelity & smallest file size (Recommended)"
+                            "mp3" -> "MP3: Universal compatibility across all car stereos & players"
+                            "m4a" -> "M4A: Native Apple AAC audio format"
+                            "flac" -> "FLAC: Lossless studio master audio quality"
+                            "wav" -> "WAV: Uncompressed raw PCM audio"
+                            else -> "${state.defaultAudioFormat.uppercase()} format"
+                        }
+                        Text(
+                            text = desc,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(12.dp))
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -107,11 +189,11 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     audioFormats.forEach { fmt ->
-                        val isSelected = state.defaultAudioFormat == fmt
+                        val isSelected = state.defaultAudioFormat.equals(fmt, ignoreCase = true)
                         FilterChip(
                             selected = isSelected,
                             onClick = { viewModel.setDefaultAudioFormat(fmt) },
-                            label = { Text(fmt.uppercase(), maxLines = 1) },
+                            label = { Text(fmt.uppercase(), maxLines = 1, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
                             leadingIcon = if (isSelected) {
                                 { Icon(Icons.Filled.Check, contentDescription = null, Modifier.size(16.dp)) }
                             } else null,
@@ -125,20 +207,23 @@ fun SettingsScreen(
         Spacer(Modifier.height(16.dp))
 
         // ── Video defaults ────────────────────────────────────────────
-        SettingsSection(title = stringResource(R.string.settings_video_title)) {
+        SettingsSection(
+            title = stringResource(R.string.settings_video_title),
+            icon = Icons.Outlined.VideoFile
+        ) {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        Icons.Outlined.VideoFile,
+                        Icons.Outlined.Movie,
                         contentDescription = null,
-                        modifier = Modifier.size(24.dp),
+                        modifier = Modifier.size(22.dp),
                         tint = MaterialTheme.colorScheme.primary,
                     )
                     Spacer(Modifier.width(16.dp))
                     Column {
                         Text(
                             stringResource(R.string.settings_video_container),
-                            style = MaterialTheme.typography.bodyMedium,
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                         )
                         Text(
                             stringResource(R.string.settings_video_container_desc),
@@ -160,12 +245,35 @@ fun SettingsScreen(
                             shape = SegmentedButtonDefaults.itemShape(index = index, count = videoContainers.size),
                             label = {
                                 Text(
-                                    if (fmt == "mkv") "MKV (Recommended)" else "MP4",
+                                    fmt.uppercase(),
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                     maxLines = 1
                                 )
                             }
                         )
                     }
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(start = 4.dp)
+                ) {
+                    Icon(
+                        Icons.Filled.CheckCircle,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = if (state.defaultVideoContainer.equals("mkv", ignoreCase = true)) {
+                            "MKV: Recommended for 4K/1080p, multiple audio tracks & soft subtitles"
+                        } else {
+                            "MP4: Best for universal compatibility with older TVs & QuickTime"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
@@ -173,28 +281,31 @@ fun SettingsScreen(
         Spacer(Modifier.height(16.dp))
 
         // ── Performance ───────────────────────────────────────────────
-        SettingsSection(title = "Performance") {
+        SettingsSection(
+            title = "Performance & Acceleration",
+            icon = Icons.Outlined.Speed
+        ) {
             SwitchSettingsItem(
                 title = stringResource(R.string.settings_fast_downloader),
                 subtitle = stringResource(R.string.settings_fast_downloader_desc),
-                icon = Icons.Outlined.Speed,
+                icon = Icons.Outlined.Bolt,
                 checked = state.useFastDownloader,
                 onCheckedChange = viewModel::setFastDownloader,
             )
-            HorizontalDivider(Modifier.padding(start = 56.dp))
+            HorizontalDivider(Modifier.padding(start = 56.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
             Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        Icons.Outlined.AltRoute,
+                        Icons.AutoMirrored.Outlined.AltRoute,
                         contentDescription = null,
-                        modifier = Modifier.size(24.dp),
+                        modifier = Modifier.size(22.dp),
                         tint = MaterialTheme.colorScheme.primary,
                     )
                     Spacer(Modifier.width(16.dp))
                     Column {
                         Text(
                             "Parallel Connections / Chunk Splitting",
-                            style = MaterialTheme.typography.bodyMedium,
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                         )
                         Text(
                             "Splits video files into parallel segments for up to 10x faster downloads",
@@ -218,77 +329,45 @@ fun SettingsScreen(
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-                Text(
-                    text = when (state.downloadThreads) {
-                        4 -> "4 connections (Standard)"
-                        8 -> "8 connections (Balanced)"
-                        16 -> "16 connections (Fast • Recommended)"
-                        32 -> "32 connections (Maximum turbo)"
-                        else -> "${state.downloadThreads} connections"
-                    },
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(start = 4.dp)
-                )
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        // ── Command templates ─────────────────────────────────────────
-        SettingsSection(title = "Advanced: Command templates") {
-            if (state.commandTemplates.isEmpty()) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(start = 4.dp)
                 ) {
                     Icon(
-                        Icons.Outlined.Terminal,
+                        Icons.Filled.Tune,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.primary
                     )
-                    Spacer(Modifier.width(12.dp))
+                    Spacer(Modifier.width(6.dp))
                     Text(
-                        "No custom templates yet. Tap + to add one.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text = when (state.downloadThreads) {
+                            4 -> "4 connections • Standard (Battery friendly)"
+                            8 -> "8 connections • Balanced (Mobile data friendly)"
+                            16 -> "16 connections • Fast & turbo chunking (Recommended)"
+                            32 -> "32 connections • Extreme maximum throughput"
+                            else -> "${state.downloadThreads} connections"
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
-            } else {
-                state.commandTemplates.forEachIndexed { i, tpl ->
-                    TemplateItem(
-                        template = tpl,
-                        onDelete = { viewModel.deleteTemplate(tpl) },
-                    )
-                    if (i < state.commandTemplates.lastIndex) {
-                        HorizontalDivider(Modifier.padding(start = 56.dp))
-                    }
-                }
-            }
-            HorizontalDivider()
-            TextButton(
-                onClick = { showAddTemplateSheet = true },
-                modifier = Modifier.padding(horizontal = 8.dp),
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.settings_add_template))
             }
         }
 
         Spacer(Modifier.height(16.dp))
 
-        // ── Updates & Components ──────────────────────────────────────
-        SettingsSection(title = "Updates & Components") {
+        // ── Engine Components ──────────────────────────────────────────
+        SettingsSection(
+            title = "Engine & Components",
+            icon = Icons.Outlined.Memory
+        ) {
             // Crunch App item
             val appUpdate = state.availableAppUpdate
             ListItem(
                 headlineContent = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Crunch Application", style = MaterialTheme.typography.bodyLarge)
+                        Text("Crunch Application", style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium))
                         Spacer(Modifier.width(8.dp))
                         if (appUpdate != null) {
                             Surface(
@@ -297,7 +376,7 @@ fun SettingsScreen(
                             ) {
                                 Text(
                                     "${appUpdate.versionTag} Available",
-                                    style = MaterialTheme.typography.labelSmall,
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                                     color = MaterialTheme.colorScheme.onPrimary,
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
@@ -322,7 +401,7 @@ fun SettingsScreen(
                         if (appUpdate != null)
                             "Version ${appUpdate.versionTag} ready • ${appUpdate.formattedSize} • Tap Update"
                         else
-                            "v${state.appVersion} • Installed release",
+                            "v${state.appVersion} • Release build with permanent keystore",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -332,14 +411,15 @@ fun SettingsScreen(
                         if (appUpdate != null) Icons.Outlined.NewReleases else Icons.Outlined.AppShortcut,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                 },
                 trailingContent = {
                     if (appUpdate != null) {
                         FilledTonalButton(
                             onClick = { viewModel.showAppUpdateDialog(true) },
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            shape = RoundedCornerShape(10.dp)
                         ) {
                             Text("Update", style = MaterialTheme.typography.labelMedium)
                         }
@@ -347,13 +427,13 @@ fun SettingsScreen(
                 },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
-            HorizontalDivider(Modifier.padding(start = 56.dp))
+            HorizontalDivider(Modifier.padding(start = 56.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
 
             // yt-dlp item
             ListItem(
                 headlineContent = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("yt-dlp Engine", style = MaterialTheme.typography.bodyLarge)
+                        Text("yt-dlp Engine", style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium))
                         Spacer(Modifier.width(8.dp))
                         Surface(
                             color = MaterialTheme.colorScheme.primaryContainer,
@@ -380,18 +460,18 @@ fun SettingsScreen(
                         Icons.Outlined.Code,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                 },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
-            HorizontalDivider(Modifier.padding(start = 56.dp))
+            HorizontalDivider(Modifier.padding(start = 56.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
 
             // FFmpeg item
             ListItem(
                 headlineContent = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("FFmpeg", style = MaterialTheme.typography.bodyLarge)
+                        Text("FFmpeg", style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium))
                         Spacer(Modifier.width(8.dp))
                         Surface(
                             color = MaterialTheme.colorScheme.surfaceVariant,
@@ -418,18 +498,18 @@ fun SettingsScreen(
                         Icons.Outlined.Transform,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                 },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
-            HorizontalDivider(Modifier.padding(start = 56.dp))
+            HorizontalDivider(Modifier.padding(start = 56.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
 
             // aria2c item
             ListItem(
                 headlineContent = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("aria2c", style = MaterialTheme.typography.bodyLarge)
+                        Text("aria2c", style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium))
                         Spacer(Modifier.width(8.dp))
                         Surface(
                             color = MaterialTheme.colorScheme.surfaceVariant,
@@ -456,14 +536,20 @@ fun SettingsScreen(
                         Icons.Outlined.Bolt,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                 },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
-            HorizontalDivider(Modifier.padding(start = 56.dp))
+        }
 
-            // Auto-check app updates toggle
+        Spacer(Modifier.height(16.dp))
+
+        // ── Updates & Automation ──────────────────────────────────────
+        SettingsSection(
+            title = "Updates & Automation",
+            icon = Icons.Outlined.Autorenew
+        ) {
             SwitchSettingsItem(
                 title = "Automatic app updates",
                 subtitle = "Notify when a new Crunch APK is released on GitHub",
@@ -471,9 +557,7 @@ fun SettingsScreen(
                 checked = state.autoCheckAppUpdates,
                 onCheckedChange = viewModel::setAutoCheckAppUpdates,
             )
-            HorizontalDivider(Modifier.padding(start = 56.dp))
-
-            // Auto-update engine toggle
+            HorizontalDivider(Modifier.padding(start = 56.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
             SwitchSettingsItem(
                 title = "Automatic engine updates",
                 subtitle = "Silently keep yt-dlp updated in background to prevent extraction breakages",
@@ -483,7 +567,7 @@ fun SettingsScreen(
             )
 
             if (state.autoUpdateEngine || state.autoCheckAppUpdates) {
-                HorizontalDivider(Modifier.padding(start = 56.dp))
+                HorizontalDivider(Modifier.padding(start = 56.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
                 SwitchSettingsItem(
                     title = "Update on Wi-Fi only",
                     subtitle = "Conserve cellular mobile data for component and APK downloads",
@@ -493,15 +577,15 @@ fun SettingsScreen(
                 )
             }
 
-            HorizontalDivider()
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
 
             // Update status alert banner if present
             if (state.updateStatusMessage != null) {
                 val isSuccess = state.isUpdateSuccess == true
                 Surface(
                     color = if (isSuccess) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                            else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
-                    shape = RoundedCornerShape(12.dp),
+                    else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp)
@@ -583,14 +667,64 @@ fun SettingsScreen(
             }
         }
 
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(16.dp))
+
+        // ── Command templates ─────────────────────────────────────────
+        SettingsSection(
+            title = "Advanced: Command Templates",
+            icon = Icons.Outlined.Terminal
+        ) {
+            if (state.commandTemplates.isEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Outlined.Code,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        "No custom templates yet. Tap + to add one.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else {
+                state.commandTemplates.forEachIndexed { i, tpl ->
+                    TemplateItem(
+                        template = tpl,
+                        onDelete = { viewModel.deleteTemplate(tpl) },
+                    )
+                    if (i < state.commandTemplates.lastIndex) {
+                        HorizontalDivider(Modifier.padding(start = 56.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+                    }
+                }
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+            TextButton(
+                onClick = { showAddTemplateSheet = true },
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.settings_add_template))
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
 
         // ── About Card ──────────────────────────────────────────────────
         Card(
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
             ),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column(
@@ -601,21 +735,22 @@ fun SettingsScreen(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(64.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                        .size(68.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f))
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), RoundedCornerShape(20.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     Image(
                         painter = painterResource(R.drawable.ic_crunch_logo),
                         contentDescription = "Crunch Logo",
-                        modifier = Modifier.size(50.dp)
+                        modifier = Modifier.size(52.dp)
                     )
                 }
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(14.dp))
                 Text(
                     "Crunch",
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.primary,
                 )
                 Text(
@@ -629,10 +764,34 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
                 )
+                Spacer(Modifier.height(16.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { viewModel.openGitHubRepo() },
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Icon(Icons.Outlined.Code, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("GitHub", style = MaterialTheme.typography.labelMedium)
+                    }
+                    OutlinedButton(
+                        onClick = { viewModel.rescanDownloads() },
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Icon(Icons.Outlined.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Rescan Files", style = MaterialTheme.typography.labelMedium)
+                    }
+                }
             }
         }
 
-        Spacer(Modifier.height(48.dp))
+        // Generous bottom spacer so navigation bar never obstructs any card
+        Spacer(Modifier.height(100.dp))
     }
 
     // App Update Dialog
@@ -661,19 +820,34 @@ fun SettingsScreen(
 @Composable
 private fun SettingsSection(
     title: String,
+    icon: ImageVector? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary,
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.padding(start = 6.dp, bottom = 8.dp)
-    )
+    ) {
+        if (icon != null) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
     Card(
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
         ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(content = content)
@@ -684,15 +858,26 @@ private fun SettingsSection(
 private fun SwitchSettingsItem(
     title: String,
     subtitle: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
 ) {
     ListItem(
-        headlineContent = { Text(title) },
-        supportingContent = { Text(subtitle) },
+        headlineContent = {
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium)
+            )
+        },
+        supportingContent = {
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        },
         leadingContent = {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
         },
         trailingContent = {
             Switch(checked = checked, onCheckedChange = onCheckedChange)
@@ -707,7 +892,7 @@ private fun TemplateItem(
     onDelete: () -> Unit,
 ) {
     ListItem(
-        headlineContent = { Text(template.name) },
+        headlineContent = { Text(template.name, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)) },
         supportingContent = {
             Text(
                 template.extraArgs,
@@ -718,12 +903,12 @@ private fun TemplateItem(
         },
         leadingContent = {
             Icon(Icons.Outlined.Code, contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary)
+                tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
         },
         trailingContent = {
             IconButton(onClick = onDelete) {
                 Icon(Icons.Filled.DeleteOutline, contentDescription = "Delete template",
-                    tint = MaterialTheme.colorScheme.error)
+                    tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
             }
         },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
@@ -741,7 +926,7 @@ private fun AddTemplateSheet(
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
-            Text("New Command Template", style = MaterialTheme.typography.titleLarge)
+            Text("New Command Template", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
             Spacer(Modifier.height(16.dp))
             OutlinedTextField(
                 value = name,
@@ -749,6 +934,7 @@ private fun AddTemplateSheet(
                 label = { Text(stringResource(R.string.settings_template_name_hint)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                shape = RoundedCornerShape(14.dp)
             )
             Spacer(Modifier.height(12.dp))
             OutlinedTextField(
@@ -759,12 +945,14 @@ private fun AddTemplateSheet(
                 minLines = 2,
                 maxLines = 4,
                 placeholder = { Text("e.g. --remux-video mkv --no-playlist") },
+                shape = RoundedCornerShape(14.dp)
             )
             Spacer(Modifier.height(20.dp))
             Button(
                 onClick = { onAdd(name.trim(), args.trim()) },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = name.isNotBlank() && args.isNotBlank(),
+                shape = RoundedCornerShape(14.dp)
             ) {
                 Text("Add Template")
             }
@@ -785,8 +973,8 @@ private fun AppUpdateDialog(
         icon = {
             Box(
                 modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .size(52.dp)
+                    .clip(RoundedCornerShape(16.dp))
                     .background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center
             ) {
@@ -794,7 +982,7 @@ private fun AppUpdateDialog(
                     Icons.Outlined.Upgrade,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(30.dp)
                 )
             }
         },
@@ -802,7 +990,7 @@ private fun AppUpdateDialog(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     "Update Available",
-                    style = MaterialTheme.typography.titleLarge
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                 )
                 Text(
                     "${updateInfo.versionTag} • ${updateInfo.formattedSize}",
@@ -819,13 +1007,14 @@ private fun AppUpdateDialog(
             ) {
                 Text(
                     "What's New:",
-                    style = MaterialTheme.typography.labelLarge,
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(Modifier.height(8.dp))
                 Surface(
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = 220.dp)
@@ -834,7 +1023,7 @@ private fun AppUpdateDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .verticalScroll(rememberScrollState())
-                            .padding(12.dp)
+                            .padding(14.dp)
                     ) {
                         Text(
                             text = updateInfo.releaseNotes.ifBlank { "Release notes available on GitHub." },
@@ -852,7 +1041,10 @@ private fun AppUpdateDialog(
             }
         },
         confirmButton = {
-            Button(onClick = onDownload) {
+            Button(
+                onClick = onDownload,
+                shape = RoundedCornerShape(12.dp)
+            ) {
                 Icon(Icons.Filled.Download, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text("Download APK")
@@ -870,4 +1062,3 @@ private fun AppUpdateDialog(
         }
     )
 }
-
