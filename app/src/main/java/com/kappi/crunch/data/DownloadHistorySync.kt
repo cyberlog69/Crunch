@@ -23,13 +23,23 @@ private const val TAG = "DownloadHistorySync"
  */
 object DownloadHistorySync {
 
-    private val MEDIA_EXTENSIONS = setOf(
+    internal val MEDIA_EXTENSIONS = setOf(
         "mp4", "mkv", "webm", "mp3", "m4a", "opus", "flac", "wav", "aac", "ogg", "m4v", "mov", "avi", "ts"
     )
 
-    private val AUDIO_EXTENSIONS = setOf(
+    internal val AUDIO_EXTENSIONS = setOf(
         "mp3", "m4a", "opus", "flac", "wav", "aac", "ogg"
     )
+
+    internal fun isMediaExtension(ext: String): Boolean = ext.lowercase() in MEDIA_EXTENSIONS
+
+    internal fun isAudioExtension(ext: String): Boolean = ext.lowercase() in AUDIO_EXTENSIONS
+
+    internal fun generateFileDownloadId(fileName: String, length: Long): String =
+        UUID.nameUUIDFromBytes("crunch_recovered_${fileName}_$length".toByteArray()).toString()
+
+    internal fun generateMediaStoreDownloadId(fileName: String, size: Long): String =
+        UUID.nameUUIDFromBytes("crunch_mediastore_${fileName}_$size".toByteArray()).toString()
 
     suspend fun sync(context: Context, dao: DownloadDao) = withContext(Dispatchers.IO) {
         try {
@@ -68,7 +78,7 @@ object DownloadHistorySync {
         }
     }
 
-    private fun processDiscoveredFile(
+    internal fun processDiscoveredFile(
         file: File,
         existingPaths: Set<String>,
         existingTitles: Set<String>,
@@ -76,16 +86,16 @@ object DownloadHistorySync {
     ) {
         if (!file.isFile || file.length() <= 0) return
         val ext = file.extension.lowercase()
-        if (ext !in MEDIA_EXTENSIONS) return
+        if (!isMediaExtension(ext)) return
 
         val path = file.absolutePath
         val title = file.nameWithoutExtension
 
         if (path in existingPaths || title in existingTitles) return
 
-        val isAudio = ext in AUDIO_EXTENSIONS
+        val isAudio = isAudioExtension(ext)
         val ts = file.lastModified().takeIf { it > 0 } ?: System.currentTimeMillis()
-        val deterministicId = UUID.nameUUIDFromBytes("crunch_recovered_${file.name}_${file.length()}".toByteArray()).toString()
+        val deterministicId = generateFileDownloadId(file.name, file.length())
 
         outList.add(
             DownloadItem(
@@ -152,16 +162,16 @@ object DownloadHistorySync {
 
                     if (size <= 0) continue
                     val ext = name.substringAfterLast('.', "").lowercase()
-                    if (ext !in MEDIA_EXTENSIONS) continue
+                    if (!isMediaExtension(ext)) continue
 
                     val contentUri = ContentUris.withAppendedId(collection, mediaId).toString()
                     val title = name.substringBeforeLast('.')
 
                     if (contentUri in existingPaths || title in existingTitles) continue
 
-                    val isAudio = ext in AUDIO_EXTENSIONS
+                    val isAudio = isAudioExtension(ext)
                     val ts = if (dateModified > 0) dateModified else System.currentTimeMillis()
-                    val deterministicId = UUID.nameUUIDFromBytes("crunch_mediastore_${name}_$size".toByteArray()).toString()
+                    val deterministicId = generateMediaStoreDownloadId(name, size)
 
                     outList.add(
                         DownloadItem(

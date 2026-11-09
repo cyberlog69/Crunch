@@ -23,6 +23,8 @@ import com.yausername.youtubedl_android.YoutubeDL
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -119,39 +121,42 @@ class DownloadWorker(
             val threads = prefs.downloadThreads
             val lastPersist = AtomicLong(0L)
 
-            val stagedPath = engine.download(
-                url = item.url,
-                downloadType = item.downloadType,
-                formatId = item.formatId,
-                audioFormat = item.audioFormat,
-                videoContainer = prefs.defaultVideoContainer,
-                outputDir = outputDir,
-                subtitleLang = item.subtitleLang,
-                embedSubtitles = item.embedSubtitles,
-                embedThumbnail = prefs.embedThumbnail,
-                embedMetadata = prefs.embedMetadata,
-                useExternalDownloader = useFast,
-                downloadThreads = threads,
-                customExtraArgs = item.customTemplate,
-                processId = downloadId,
-                onProgress = { progress, speed, eta ->
-                    // yt-dlp emits several lines per second; persist at most twice a second.
-                    val now = SystemClock.elapsedRealtime()
-                    val previous = lastPersist.get()
-                    if (now - previous < PROGRESS_THROTTLE_MS && progress < 1f) return@download
-                    if (!lastPersist.compareAndSet(previous, now)) return@download
+            val stagedPath = coroutineScope {
+                val workerScope = this
+                engine.download(
+                    url = item.url,
+                    downloadType = item.downloadType,
+                    formatId = item.formatId,
+                    audioFormat = item.audioFormat,
+                    videoContainer = prefs.defaultVideoContainer,
+                    outputDir = outputDir,
+                    subtitleLang = item.subtitleLang,
+                    embedSubtitles = item.embedSubtitles,
+                    embedThumbnail = prefs.embedThumbnail,
+                    embedMetadata = prefs.embedMetadata,
+                    useExternalDownloader = useFast,
+                    downloadThreads = threads,
+                    customExtraArgs = item.customTemplate,
+                    processId = downloadId,
+                    onProgress = { progress, speed, eta ->
+                        // yt-dlp emits several lines per second; persist at most twice a second.
+                        val now = SystemClock.elapsedRealtime()
+                        val previous = lastPersist.get()
+                        if (now - previous < PROGRESS_THROTTLE_MS && progress < 1f) return@download
+                        if (!lastPersist.compareAndSet(previous, now)) return@download
 
-                    kotlinx.coroutines.runBlocking {
-                        dao.updateProgress(downloadId, progress, speed, eta)
+                        workerScope.launch(Dispatchers.IO) {
+                            dao.updateProgress(downloadId, progress, speed, eta)
+                        }
+                        setProgressAsync(workDataOf(
+                            "progress" to progress,
+                            "speed" to speed,
+                            "eta" to eta,
+                        ))
+                        nm.notify(notifId, buildNotification(item, progress, speed, eta).build())
                     }
-                    setProgressAsync(workDataOf(
-                        "progress" to progress,
-                        "speed" to speed,
-                        "eta" to eta,
-                    ))
-                    nm.notify(notifId, buildNotification(item, progress, speed, eta).build())
-                }
-            )
+                )
+            }
 
             if (stagedPath.isEmpty()) throw IOException("yt-dlp finished without producing a file")
 

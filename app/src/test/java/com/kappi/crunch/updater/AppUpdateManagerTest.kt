@@ -2,6 +2,7 @@ package com.kappi.crunch.updater
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -15,6 +16,9 @@ class AppUpdateManagerTest {
         assertTrue(AppUpdateManager.isNewerVersion("2.0.0", "1.0.2"))
         assertTrue(AppUpdateManager.isNewerVersion("1.0.2.1", "1.0.2"))
         assertTrue(AppUpdateManager.isNewerVersion("v1.0.3-beta", "1.0.2"))
+        assertTrue(AppUpdateManager.isNewerVersion("1.10.0", "1.9.0"))
+        assertTrue(AppUpdateManager.isNewerVersion("1.0.10", "1.0.9"))
+        assertTrue(AppUpdateManager.isNewerVersion("  v1.0.8  ", "1.0.7"))
     }
 
     @Test
@@ -24,13 +28,38 @@ class AppUpdateManagerTest {
         assertFalse(AppUpdateManager.isNewerVersion("1.0.1", "1.0.2"))
         assertFalse(AppUpdateManager.isNewerVersion("0.9.9", "1.0.2"))
         assertFalse(AppUpdateManager.isNewerVersion("1.0.0", "1.0.2"))
+        assertFalse(AppUpdateManager.isNewerVersion("1.0.7", "v1.0.7"))
+        assertFalse(AppUpdateManager.isNewerVersion("1.0.2-beta", "1.0.2"))
     }
 
     @Test
     fun testFormatFileSize() {
+        assertEquals("Unknown size", AppUpdateManager.formatFileSize(-1))
         assertEquals("0.0 MB", AppUpdateManager.formatFileSize(0))
+        assertEquals("1.0 MB", AppUpdateManager.formatFileSize(1024 * 1024))
         assertEquals("10.0 MB", AppUpdateManager.formatFileSize(10 * 1024 * 1024))
         assertEquals("24.5 MB", AppUpdateManager.formatFileSize((24.5 * 1024 * 1024).toLong()))
+        assertEquals("1,024.0 MB", AppUpdateManager.formatFileSize(1024L * 1024 * 1024))
+    }
+
+    @Test
+    fun testSelectBestApkAsset_emptyOrNonApkList() {
+        assertNull(AppUpdateManager.selectBestApkAsset(emptyList()))
+
+        val nonApkAssets = listOf(
+            GitHubAsset(name = "crunch-sources.zip", size = 1000, downloadUrl = "https://example.com/zip"),
+            GitHubAsset(name = "notes.txt", size = 50, downloadUrl = "https://example.com/notes.txt")
+        )
+        assertNull(AppUpdateManager.selectBestApkAsset(nonApkAssets))
+    }
+
+    @Test
+    fun testSelectBestApkAsset_singleApk() {
+        val assets = listOf(
+            GitHubAsset(name = "Crunch-v1.0.3.apk", size = 20000000, downloadUrl = "https://example.com/crunch.apk")
+        )
+        val selected = AppUpdateManager.selectBestApkAsset(assets)
+        assertEquals("Crunch-v1.0.3.apk", selected?.name)
     }
 
     @Test
@@ -45,11 +74,12 @@ class AppUpdateManagerTest {
     }
 
     @Test
-    fun testSelectBestApkAsset_singleApk() {
+    fun testSelectBestApkAsset_releaseKeywordFallback() {
         val assets = listOf(
-            GitHubAsset(name = "Crunch-v1.0.3.apk", size = 20000000, downloadUrl = "https://example.com/crunch.apk")
+            GitHubAsset(name = "crunch-debug.apk", size = 15000000, downloadUrl = "https://example.com/debug.apk"),
+            GitHubAsset(name = "crunch-app-release.apk", size = 22000000, downloadUrl = "https://example.com/release.apk")
         )
         val selected = AppUpdateManager.selectBestApkAsset(assets)
-        assertEquals("Crunch-v1.0.3.apk", selected?.name)
+        assertEquals("crunch-app-release.apk", selected?.name)
     }
 }

@@ -21,10 +21,33 @@
 -dontwarn sun.misc.Unsafe
 
 # ---------------------------------------------------------------------------
+# Kotlinx Serialization: models serialized to/from JSON
+# ---------------------------------------------------------------------------
+-dontnote kotlinx.serialization.SerializationKt
+-keepclassmembers class * extends kotlinx.serialization.internal.GeneratedSerializer {
+    <fields>;
+}
+-keepclasseswithmembers class * {
+    @kotlinx.serialization.Serializable <fields>;
+}
+-keepclasseswithmembers class * {
+    @kotlinx.serialization.SerialName <fields>;
+}
+-keepclassmembers class * {
+    *** Companion;
+}
+-keepclasseswithmembers class * {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+
+# ---------------------------------------------------------------------------
 # Room: entities are instantiated and populated by generated DAO code.
 # room-runtime ships consumer rules, but keep the entities explicit so a future
 # dependency change cannot silently break database reads.
 # ---------------------------------------------------------------------------
+-keep class * extends androidx.room.RoomDatabase
+-keep @androidx.room.Dao interface * { *; }
+-keep @androidx.room.Entity class * { *; }
 -keep class com.kappi.crunch.data.DownloadItem { *; }
 -keep class com.kappi.crunch.data.PlaylistEntry { *; }
 
@@ -44,6 +67,13 @@
 -keep class com.fasterxml.jackson.** { *; }
 -dontwarn com.fasterxml.jackson.**
 -dontwarn org.apache.commons.io.**
+
+# ---------------------------------------------------------------------------
+# Native JNI methods: ffmpeg, aria2c, python, and youtubedl native bindings
+# ---------------------------------------------------------------------------
+-keepclasseswithmembernames class * {
+    native <methods>;
+}
 
 # ---------------------------------------------------------------------------
 # Apache Commons Compress: ZipUtils unpacks the engine zips with it.
