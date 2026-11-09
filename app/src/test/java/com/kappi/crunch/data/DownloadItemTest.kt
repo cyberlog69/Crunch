@@ -92,3 +92,4 @@ class DownloadItemTest {
         assertTrue(statuses.contains(DownloadStatus.CANCELLED))
     }
 }
+

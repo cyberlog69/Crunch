@@ -51,3 +51,4 @@ class CommandTemplateTest {
         assertTrue(restored.isEmpty())
     }
 }
+

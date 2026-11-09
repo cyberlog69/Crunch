@@ -143,3 +143,4 @@ class DownloadHistorySyncTest {
         assertEquals(audioFile.absolutePath, recoveredAudio.filePath)
     }
 }
+
