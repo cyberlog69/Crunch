@@ -2,6 +2,13 @@
 
 A modern, high-performance media and video stream downloader for Android, built with **Jetpack Compose**, **Material 3**, and powered by native **yt-dlp**, **FFmpeg**, and **aria2c**.
 
+[![Official Website](https://img.shields.io/badge/Official%20Website-crunch--website.vercel.app-00E5C0?style=for-the-badge&logo=vercel&logoColor=white)](https://crunch-website.vercel.app)
+[![GitHub Release](https://img.shields.io/github/v/release/cyberlog69/Crunch?style=for-the-badge&color=00E5C0)](https://github.com/cyberlog69/Crunch/releases)
+[![License](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)](LICENSE)
+
+> 🌐 **Official Website & Download Hub:** [crunch-website.vercel.app](https://crunch-website.vercel.app) (or `crunch.kappi.com`)  
+> Direct APK downloads for all architectures, cryptographic certificate verification, and sideloading instructions.
+
 ---
 
 ## ✨ Features

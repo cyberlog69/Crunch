@@ -1,0 +1,55 @@
+export const APP_CONFIG = {
+  name: "Crunch",
+  tagline: "High-Speed Media & Stream Engine",
+  description:
+    "Extract and download high-resolution videos and lossless audio from 1000+ sites. Powered by yt-dlp, FFmpeg NDK, and aria2c multi-segment engine. Free, open source, and zero telemetry.",
+  currentVersion: "v1.0.7",
+  versionCode: 8,
+  packageName: "com.kappi.crunch",
+  githubRepo: "https://github.com/cyberlog69/Crunch",
+  githubReleasesUrl: "https://github.com/cyberlog69/Crunch/releases",
+  downloadBaseUrl: "https://github.com/cyberlog69/Crunch/releases/download/v1.0.7",
+  securityUrl: "https://github.com/cyberlog69/Crunch/blob/main/SECURITY.md",
+  signingCert: {
+    owner: "CN=Crunch, OU=Crunch, O=Kappi, C=US",
+    sha256: "32:F4:41:36:31:6E:6D:37:E7:D1:C5:04:B7:D3:D6:FA:BF:16:28:96:D4:87:D4:91:3B:E6:71:AA:64:8C:BE:96",
+    sha1: "0D:1F:29:D5:84:95:12:A0:E2:46:26:94:C3:44:ED:63:39:77:F7:CB",
+    algorithm: "2048-bit RSA with SHA384withRSA",
+    validity: "Until March 24, 2054",
+  },
+  architectures: [
+    {
+      id: "universal",
+      name: "Universal APK",
+      recommended: true,
+      filename: "crunch-v1.0.7-universal-release.apk",
+      description: "Includes native binaries for all CPU architectures. Works on any modern Android device.",
+      size: "~115 MB",
+    },
+    {
+      id: "arm64-v8a",
+      name: "arm64-v8a",
+      recommended: false,
+      filename: "crunch-v1.0.7-arm64-v8a-release.apk",
+      description: "Optimized 64-bit build for almost all modern Android phones released since 2017.",
+      size: "~58 MB",
+    },
+    {
+      id: "armeabi-v7a",
+      name: "armeabi-v7a",
+      recommended: false,
+      filename: "crunch-v1.0.7-armeabi-v7a-release.apk",
+      description: "Legacy 32-bit ARM build for older phones and entry-level TV sticks.",
+      size: "~54 MB",
+    },
+    {
+      id: "x86_64",
+      name: "x86_64",
+      recommended: false,
+      filename: "crunch-v1.0.7-x86_64-release.apk",
+      description: "64-bit Intel/AMD build for Android emulators, ChromeOS, and Windows Subsystem for Android.",
+      size: "~62 MB",
+    },
+  ],
+};
+
