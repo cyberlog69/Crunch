@@ -27,9 +27,3 @@ phone_*.png
 # Internal planning documents — not for public repository
 ROADMAP.md
 WEBSITE_PLAN.md
-
-# Website builds & node dependencies
-website/node_modules/
-website/.next/
-website/out/
-website/.env*.local
