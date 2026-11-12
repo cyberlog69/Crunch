@@ -1,6 +1,7 @@
 package com.kappi.crunch.ui.downloads
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.kappi.crunch.data.*
@@ -15,9 +16,20 @@ class DownloadsViewModel(application: Application) : AndroidViewModel(applicatio
     private val db = CrunchDatabase.getInstance(application)
     private val dao = db.downloadDao()
 
+    private val _syncState = MutableStateFlow(
+        SyncUiState(hasFolderAccess = DownloadHistorySync.hasPersistedFolderAccess(application))
+    )
+    val syncState: StateFlow<SyncUiState> = _syncState.asStateFlow()
+
     init {
         viewModelScope.launch(Dispatchers.IO) {
-            DownloadHistorySync.sync(application, dao)
+            val result = DownloadHistorySync.sync(application, dao, removeMissing = false)
+            _syncState.update {
+                it.copy(
+                    hasFolderAccess = result.hasFolderAccess,
+                    isSyncing = false,
+                )
+            }
         }
     }
 
@@ -69,10 +81,41 @@ class DownloadsViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun rescanDownloadsFolder() {
+    fun rescanDownloadsFolder(manual: Boolean = true) {
+        if (_syncState.value.isSyncing) return
         viewModelScope.launch(Dispatchers.IO) {
-            DownloadHistorySync.sync(getApplication(), dao)
+            _syncState.update { it.copy(isSyncing = true, feedbackMessage = null) }
+            val result = DownloadHistorySync.sync(
+                context = getApplication(),
+                dao = dao,
+                removeMissing = manual,
+            )
+            _syncState.update {
+                it.copy(
+                    isSyncing = false,
+                    hasFolderAccess = result.hasFolderAccess,
+                    feedbackMessage = if (manual) result.statusMessage() else null,
+                )
+            }
         }
+    }
+
+    fun onFolderSelected(treeUri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val saved = DownloadHistorySync.saveFolderAccess(getApplication(), treeUri)
+            if (saved) {
+                _syncState.update { it.copy(hasFolderAccess = true) }
+                rescanDownloadsFolder(manual = true)
+            } else {
+                _syncState.update {
+                    it.copy(feedbackMessage = "Could not persist folder access. Please select Downloads/Crunch.")
+                }
+            }
+        }
+    }
+
+    fun dismissSyncFeedback() {
+        _syncState.update { it.copy(feedbackMessage = null) }
     }
 
     private companion object {
@@ -93,4 +136,10 @@ class DownloadsViewModel(application: Application) : AndroidViewModel(applicatio
 data class DownloadsUiState(
     val active: List<DownloadItem> = emptyList(),
     val completed: List<DownloadItem> = emptyList(),
+)
+
+data class SyncUiState(
+    val isSyncing: Boolean = false,
+    val hasFolderAccess: Boolean = false,
+    val feedbackMessage: String? = null,
 )

@@ -2,11 +2,12 @@ package com.kappi.crunch.util
 
 import android.content.Context
 import android.net.Uri
+import android.provider.DocumentsContract
 import androidx.core.content.FileProvider
 import java.io.File
 
 /**
- * A downloaded file is identified either by a MediaStore content URI
+ * A downloaded file is identified either by a MediaStore / SAF content URI
  * ("content://…") or, on legacy storage and for staging files, by an
  * absolute filesystem path.
  */
@@ -37,8 +38,13 @@ object FileLocation {
     fun delete(context: Context, path: String): Boolean {
         if (path.isEmpty()) return false
         if (!isContentUri(path)) return File(path).delete()
+        val uri = Uri.parse(path)
         return runCatching {
-            context.contentResolver.delete(Uri.parse(path), null, null) > 0
+            if (DocumentsContract.isDocumentUri(context, uri)) {
+                DocumentsContract.deleteDocument(context.contentResolver, uri)
+            } else {
+                context.contentResolver.delete(uri, null, null) > 0
+            }
         }.getOrDefault(false)
     }
 }

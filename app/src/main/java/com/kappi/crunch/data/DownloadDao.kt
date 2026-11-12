@@ -48,6 +48,18 @@ interface DownloadDao {
     @Query("SELECT title FROM downloads")
     suspend fun getAllTitles(): List<String>
 
+    @Query("SELECT title FROM downloads WHERE status IN ('QUEUED','FETCHING','DOWNLOADING','PROCESSING')")
+    suspend fun getAllActiveTitles(): List<String>
+
+    @Query("SELECT * FROM downloads WHERE status = 'COMPLETED'")
+    suspend fun getCompletedItems(): List<DownloadItem>
+
+    @Query("UPDATE downloads SET filePath = :path, fileSize = :size WHERE id = :id")
+    suspend fun updateFileLocation(id: String, path: String, size: Long)
+
+    @Query("DELETE FROM downloads WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<String>)
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertAll(items: List<DownloadItem>)
 }

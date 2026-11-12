@@ -142,5 +142,43 @@ class DownloadHistorySyncTest {
         assertEquals("opus", recoveredAudio.audioFormat)
         assertEquals(audioFile.absolutePath, recoveredAudio.filePath)
     }
+
+    @Test
+    fun processDiscoveredFile_deduplicatesByFileNameAcrossSources() {
+        val outList = mutableListOf<DownloadItem>()
+        val existingFileNames = mutableSetOf<String>()
+        val file1 = tempFolder.newFile("Duplicate Clip.mp4").apply { writeBytes(ByteArray(2048)) }
+
+        DownloadHistorySync.processDiscoveredFile(
+            file1,
+            existingPaths = emptySet(),
+            existingTitles = emptySet(),
+            outList = outList,
+            existingFileNames = existingFileNames
+        )
+        // Simulate second discovery source finding the same filename (case-insensitive)
+        DownloadHistorySync.processDiscoveredFile(
+            file1,
+            existingPaths = emptySet(),
+            existingTitles = emptySet(),
+            outList = outList,
+            existingFileNames = existingFileNames
+        )
+
+        assertEquals("Same filename discovered twice must produce only 1 item", 1, outList.size)
+        assertTrue(existingFileNames.contains("duplicate clip.mp4"))
+    }
+
+    @Test
+    fun syncResult_statusMessagesAreInformative() {
+        val restored = SyncResult(restoredCount = 3, totalFoundOnDisk = 3, hasFolderAccess = true)
+        assertTrue(restored.statusMessage().contains("Restored 3"))
+
+        val cleaned = SyncResult(removedCount = 2, totalFoundOnDisk = 1, hasFolderAccess = true)
+        assertTrue(cleaned.statusMessage().contains("Removed 2"))
+
+        val upToDate = SyncResult(totalFoundOnDisk = 5, hasFolderAccess = true)
+        assertTrue(upToDate.statusMessage().contains("All 5"))
+    }
 }
 

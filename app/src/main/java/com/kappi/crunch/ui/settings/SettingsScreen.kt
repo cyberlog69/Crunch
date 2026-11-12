@@ -1,6 +1,9 @@
 package com.kappi.crunch.ui.settings
 
 import android.content.Intent
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -24,6 +27,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kappi.crunch.R
 import com.kappi.crunch.data.CommandTemplate
+import com.kappi.crunch.data.DownloadHistorySync
 import com.kappi.crunch.updater.AppUpdateInfo
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -34,6 +38,14 @@ fun SettingsScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var showAddTemplateSheet by remember { mutableStateOf(false) }
+
+    val folderPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { treeUri ->
+        if (treeUri != null) {
+            viewModel.onFolderSelected(treeUri)
+        }
+    }
 
     Column(
         modifier = modifier
@@ -90,7 +102,12 @@ fun SettingsScreen(
                 },
                 supportingContent = {
                     Text(
-                        "Downloads/Crunch • Preserved safely across updates",
+                        if (state.hasFolderAccess)
+                            "Downloads/Crunch • Full folder access linked"
+                        else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+                            "Downloads/Crunch • Link folder to scan files across reinstalls"
+                        else
+                            "Downloads/Crunch • Preserved safely across updates",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -104,7 +121,7 @@ fun SettingsScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            Icons.Outlined.FolderSpecial,
+                            if (state.hasFolderAccess) Icons.Outlined.FolderSpecial else Icons.Outlined.Folder,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(22.dp)
@@ -114,16 +131,90 @@ fun SettingsScreen(
                 trailingContent = {
                     FilledTonalButton(
                         onClick = { viewModel.rescanDownloads() },
+                        enabled = !state.isSyncingDownloads,
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                         shape = RoundedCornerShape(10.dp)
                     ) {
-                        Icon(Icons.Outlined.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+                        if (state.isSyncingDownloads) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        } else {
+                            Icon(Icons.Outlined.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+                        }
                         Spacer(Modifier.width(6.dp))
-                        Text("Sync", style = MaterialTheme.typography.labelMedium)
+                        Text(if (state.isSyncingDownloads) "Syncing" else "Sync", style = MaterialTheme.typography.labelMedium)
                     }
                 },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                HorizontalDivider(Modifier.padding(start = 56.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = if (state.hasFolderAccess) "Folder access granted" else "Scoped Storage access",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (state.hasFolderAccess) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    OutlinedButton(
+                        onClick = { folderPickerLauncher.launch(DownloadHistorySync.getInitialFolderUri()) },
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(10.dp),
+                    ) {
+                        Icon(Icons.Outlined.CreateNewFolder, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            if (state.hasFolderAccess) "Relink Folder" else "Link Downloads/Crunch",
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    }
+                }
+            }
+
+            if (state.syncStatusMessage != null) {
+                val isSuccess = state.isSyncSuccess != false
+                Surface(
+                    color = if (isSuccess) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                    else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            if (isSuccess) Icons.Filled.CheckCircle else Icons.Filled.Info,
+                            contentDescription = null,
+                            tint = if (isSuccess) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            state.syncStatusMessage ?: "",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(
+                            onClick = { viewModel.dismissSyncMessage() },
+                            modifier = Modifier.size(22.dp)
+                        ) {
+                            Icon(Icons.Filled.Close, contentDescription = "Dismiss", Modifier.size(14.dp))
+                        }
+                    }
+                }
+            }
         }
 
         Spacer(Modifier.height(16.dp))
@@ -779,13 +870,26 @@ fun SettingsScreen(
                     }
                     OutlinedButton(
                         onClick = { viewModel.rescanDownloads() },
+                        enabled = !state.isSyncingDownloads,
                         shape = RoundedCornerShape(12.dp),
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                     ) {
-                        Icon(Icons.Outlined.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+                        if (state.isSyncingDownloads) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(Icons.Outlined.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+                        }
                         Spacer(Modifier.width(6.dp))
-                        Text("Rescan Files", style = MaterialTheme.typography.labelMedium)
+                        Text(if (state.isSyncingDownloads) "Scanning…" else "Rescan Files", style = MaterialTheme.typography.labelMedium)
                     }
+                }
+                if (state.syncStatusMessage != null) {
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = state.syncStatusMessage ?: "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
                 }
             }
         }

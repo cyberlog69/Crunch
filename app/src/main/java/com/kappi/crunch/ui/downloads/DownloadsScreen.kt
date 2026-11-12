@@ -1,6 +1,9 @@
 package com.kappi.crunch.ui.downloads
 
 import android.content.Intent
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -18,12 +21,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.kappi.crunch.R
+import com.kappi.crunch.data.DownloadHistorySync
 import com.kappi.crunch.data.DownloadItem
 import com.kappi.crunch.data.DownloadStatus
 import com.kappi.crunch.data.DownloadType
@@ -39,48 +44,200 @@ fun DownloadsScreen(
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val syncState by viewModel.syncState.collectAsStateWithLifecycle()
     val active = state.active
     val completed = state.completed
 
-    if (active.isEmpty() && completed.isEmpty()) {
-        EmptyState(
-            onRescan = { viewModel.rescanDownloadsFolder() },
-            modifier = modifier.fillMaxSize()
-        )
-        return
+    val folderPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { treeUri ->
+        if (treeUri != null) {
+            viewModel.onFolderSelected(treeUri)
+        }
     }
 
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 96.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        if (active.isNotEmpty()) {
-            item {
-                SectionHeader(title = stringResource(R.string.active_downloads), count = active.size)
+    val openFolderPicker = {
+        folderPickerLauncher.launch(DownloadHistorySync.getInitialFolderUri())
+    }
+
+    Column(modifier = modifier.fillMaxSize()) {
+        // Persistent Sync Bar + Feedback Banner
+        SyncToolbar(
+            syncState = syncState,
+            onSync = { viewModel.rescanDownloadsFolder(manual = true) },
+            onLinkFolder = openFolderPicker,
+            onDismissFeedback = { viewModel.dismissSyncFeedback() },
+        )
+
+        if (active.isEmpty() && completed.isEmpty()) {
+            EmptyState(
+                isSyncing = syncState.isSyncing,
+                hasFolderAccess = syncState.hasFolderAccess,
+                onRescan = { viewModel.rescanDownloadsFolder(manual = true) },
+                onLinkFolder = openFolderPicker,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            )
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 96.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (active.isNotEmpty()) {
+                    item {
+                        SectionHeader(title = stringResource(R.string.active_downloads), count = active.size)
+                    }
+                    items(active, key = { it.id }) { item ->
+                        DownloadCard(
+                            item = item,
+                            onCancel = { viewModel.cancelDownload(item) },
+                            onDelete = { deleteFile -> viewModel.deleteDownload(item, deleteFile) },
+                            onRetry = { viewModel.retryDownload(item) },
+                        )
+                    }
+                }
+
+                if (completed.isNotEmpty()) {
+                    item {
+                        if (active.isNotEmpty()) Spacer(Modifier.height(8.dp))
+                        SectionHeader(title = stringResource(R.string.completed_downloads), count = completed.size)
+                    }
+                    items(completed, key = { it.id }) { item ->
+                        DownloadCard(
+                            item = item,
+                            onCancel = { viewModel.cancelDownload(item) },
+                            onDelete = { deleteFile -> viewModel.deleteDownload(item, deleteFile) },
+                            onRetry = { viewModel.retryDownload(item) },
+                        )
+                    }
+                }
             }
-            items(active, key = { it.id }) { item ->
-                DownloadCard(
-                    item = item,
-                    onCancel = { viewModel.cancelDownload(item) },
-                    onDelete = { deleteFile -> viewModel.deleteDownload(item, deleteFile) },
-                    onRetry = { viewModel.retryDownload(item) },
-                )
+        }
+    }
+}
+
+@Composable
+private fun SyncToolbar(
+    syncState: SyncUiState,
+    onSync: () -> Unit,
+    onLinkFolder: () -> Unit,
+    onDismissFeedback: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Icon(
+                        imageVector = if (syncState.hasFolderAccess) Icons.Outlined.FolderSpecial else Icons.Outlined.Folder,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            text = "Downloads/Crunch",
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            text = if (syncState.hasFolderAccess) "Full folder access linked"
+                            else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) "Scoped storage • Link folder to scan all files"
+                            else "Ready to sync",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (!syncState.hasFolderAccess && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        OutlinedButton(
+                            onClick = onLinkFolder,
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.height(34.dp),
+                        ) {
+                            Icon(Icons.Outlined.CreateNewFolder, contentDescription = null, modifier = Modifier.size(15.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Link", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+
+                    FilledTonalButton(
+                        onClick = onSync,
+                        enabled = !syncState.isSyncing,
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.height(34.dp),
+                    ) {
+                        if (syncState.isSyncing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(14.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        } else {
+                            Icon(Icons.Outlined.Sync, contentDescription = null, modifier = Modifier.size(15.dp))
+                        }
+                        Spacer(Modifier.width(5.dp))
+                        Text(if (syncState.isSyncing) "Syncing…" else "Sync", style = MaterialTheme.typography.labelMedium)
+                    }
+                }
             }
         }
 
-        if (completed.isNotEmpty()) {
-            item {
-                if (active.isNotEmpty()) Spacer(Modifier.height(8.dp))
-                SectionHeader(title = stringResource(R.string.completed_downloads), count = completed.size)
-            }
-            items(completed, key = { it.id }) { item ->
-                DownloadCard(
-                    item = item,
-                    onCancel = { viewModel.cancelDownload(item) },
-                    onDelete = { deleteFile -> viewModel.deleteDownload(item, deleteFile) },
-                    onRetry = { viewModel.retryDownload(item) },
-                )
+        AnimatedVisibility(visible = syncState.feedbackMessage != null) {
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Filled.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = syncState.feedbackMessage ?: "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(
+                        onClick = onDismissFeedback,
+                        modifier = Modifier.size(22.dp),
+                    ) {
+                        Icon(Icons.Filled.Close, contentDescription = "Dismiss", modifier = Modifier.size(14.dp))
+                    }
+                }
             }
         }
     }
@@ -409,7 +566,10 @@ private fun DeleteConfirmDialog(
 
 @Composable
 private fun EmptyState(
+    isSyncing: Boolean,
+    hasFolderAccess: Boolean,
     onRescan: () -> Unit,
+    onLinkFolder: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
@@ -447,11 +607,27 @@ private fun EmptyState(
             Spacer(Modifier.height(18.dp))
             OutlinedButton(
                 onClick = onRescan,
+                enabled = !isSyncing,
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Icon(Icons.Outlined.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+                if (isSyncing) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(Icons.Outlined.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+                }
                 Spacer(Modifier.width(8.dp))
-                Text("Restore Downloads from Storage")
+                Text(if (isSyncing) "Scanning Storage…" else "Restore Downloads from Storage")
+            }
+            if (!hasFolderAccess && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                Spacer(Modifier.height(10.dp))
+                TextButton(
+                    onClick = onLinkFolder,
+                    shape = RoundedCornerShape(12.dp),
+                ) {
+                    Icon(Icons.Outlined.CreateNewFolder, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Grant Downloads/Crunch Folder Access")
+                }
             }
         }
     }

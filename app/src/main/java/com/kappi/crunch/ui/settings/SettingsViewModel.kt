@@ -1,10 +1,12 @@
 package com.kappi.crunch.ui.settings
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.kappi.crunch.BuildConfig
 import com.kappi.crunch.data.CommandTemplate
+import com.kappi.crunch.data.DownloadHistorySync
 import com.kappi.crunch.data.UserPreferences
 import com.kappi.crunch.updater.*
 import kotlinx.coroutines.Dispatchers
@@ -36,6 +38,12 @@ data class SettingsState(
     val updateStatusMessage: String? = null,
     val isUpdateSuccess: Boolean? = null,
 
+    // Storage & Sync
+    val hasFolderAccess: Boolean = false,
+    val isSyncingDownloads: Boolean = false,
+    val syncStatusMessage: String? = null,
+    val isSyncSuccess: Boolean? = null,
+
     // App Self-Updater (GitHub Releases)
     val autoCheckAppUpdates: Boolean = true,
     val availableAppUpdate: AppUpdateInfo? = null,
@@ -64,6 +72,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             updateWifiOnly = prefs.updateWifiOnly,
             lastUpdateCheckTime = prefs.lastUpdateCheck,
             autoCheckAppUpdates = prefs.autoCheckAppUpdates,
+            hasFolderAccess = DownloadHistorySync.hasPersistedFolderAccess(application),
         )
     )
     val state: StateFlow<SettingsState> = _state.asStateFlow()
@@ -331,21 +340,43 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun rescanDownloads() {
+        if (_state.value.isSyncingDownloads) return
         viewModelScope.launch(Dispatchers.IO) {
+            _state.update { it.copy(isSyncingDownloads = true, syncStatusMessage = null) }
             val dao = com.kappi.crunch.data.CrunchDatabase.getInstance(getApplication()).downloadDao()
-            val before = dao.getAllFilePaths().size
-            com.kappi.crunch.data.DownloadHistorySync.sync(getApplication(), dao)
-            val after = dao.getAllFilePaths().size
-            val added = (after - before).coerceAtLeast(0)
+            val result = DownloadHistorySync.sync(getApplication(), dao, removeMissing = true)
             withContext(Dispatchers.Main) {
                 _state.update {
                     it.copy(
-                        updateStatusMessage = if (added > 0) "Restored $added downloads to history!" else "Download history is up to date.",
-                        isUpdateSuccess = true
+                        isSyncingDownloads = false,
+                        hasFolderAccess = result.hasFolderAccess,
+                        syncStatusMessage = result.statusMessage(),
+                        isSyncSuccess = result.totalFoundOnDisk > 0 || result.restoredCount > 0 || result.hasFolderAccess,
                     )
                 }
             }
         }
+    }
+
+    fun onFolderSelected(treeUri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val saved = DownloadHistorySync.saveFolderAccess(getApplication(), treeUri)
+            if (saved) {
+                _state.update { it.copy(hasFolderAccess = true) }
+                rescanDownloads()
+            } else {
+                _state.update {
+                    it.copy(
+                        syncStatusMessage = "Could not persist folder permission. Please select Downloads/Crunch.",
+                        isSyncSuccess = false,
+                    )
+                }
+            }
+        }
+    }
+
+    fun dismissSyncMessage() {
+        _state.update { it.copy(syncStatusMessage = null, isSyncSuccess = null) }
     }
 
     fun openGitHubRepo() {

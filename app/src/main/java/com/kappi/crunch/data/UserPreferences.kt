@@ -64,6 +64,10 @@ class UserPreferences(context: Context) {
         get() = prefs.getString(KEY_IGNORED_APP_UPDATE_VERSION, "") ?: ""
         set(v) = prefs.edit { putString(KEY_IGNORED_APP_UPDATE_VERSION, v) }
 
+    var downloadsTreeUri: String
+        get() = prefs.getString(KEY_DOWNLOADS_TREE_URI, "") ?: ""
+        set(v) = prefs.edit { putString(KEY_DOWNLOADS_TREE_URI, v) }
+
     var commandTemplates: List<CommandTemplate>
         get() {
             val json = prefs.getString(KEY_TEMPLATES, "[]") ?: "[]"
@@ -86,5 +90,6 @@ class UserPreferences(context: Context) {
         private const val KEY_LAST_APP_UPDATE_CHECK = "last_app_update_check"
         private const val KEY_IGNORED_APP_UPDATE_VERSION = "ignored_app_update_version"
         private const val KEY_TEMPLATES = "command_templates"
+        private const val KEY_DOWNLOADS_TREE_URI = "downloads_tree_uri"
     }
 }
