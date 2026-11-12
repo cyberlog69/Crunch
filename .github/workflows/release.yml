@@ -53,6 +53,32 @@ jobs:
           find app/build/outputs/apk/release/ -name "*.apk" -exec cp {} release_assets/ \;
           ls -la release_assets/
 
+      - name: Generate Release Notes
+        run: |
+          CURRENT_TAG="${{ github.ref_name || inputs.tag_name }}"
+          PREV_TAG=$(git tag --sort=-v:refname | grep -Fxv "$CURRENT_TAG" | head -n 1 || true)
+          {
+            echo "## What's New in Crunch ${CURRENT_TAG}"
+            echo ""
+            if [ -n "$PREV_TAG" ]; then
+              echo "### Changes"
+              git log "${PREV_TAG}..${CURRENT_TAG}" --no-merges --pretty=format:"- %s (\`%h\`)" || true
+              echo ""
+              echo ""
+              echo "**Full Changelog:** https://github.com/cyberlog69/Crunch/compare/${PREV_TAG}...${CURRENT_TAG}"
+            else
+              echo "### Changes"
+              git log -n 20 --no-merges --pretty=format:"- %s (\`%h\`)" || true
+              echo ""
+            fi
+            echo ""
+            echo "### Which APK should I download?"
+            echo "- **Most modern phones:** \`app-arm64-v8a-release.apk\`"
+            echo "- **Older 32-bit ARM phones:** \`app-armeabi-v7a-release.apk\`"
+            echo "- **Not sure:** \`app-universal-release.apk\`"
+          } > release_notes.md
+          cat release_notes.md
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -60,7 +86,8 @@ jobs:
           name: Crunch ${{ github.ref_name || inputs.tag_name }}
           draft: false
           prerelease: false
-          generate_release_notes: true
+          body_path: release_notes.md
+          generate_release_notes: false
           files: release_assets/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
